@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professor Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; padding: 20px; }
+        .dashboard-section { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #007bff; color: white; }
+        .danger { color: red; font-weight: bold; }
+        button { background: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; margin-right: 10px; margin-top: 10px;}
+        .btn-danger { background: #dc3545; }
+        input, select { width: 100%; padding: 8px; margin: 5px 0 15px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;}
+        .form-row { display: flex; gap: 10px; }
+        .form-row > div { flex: 1; }
+    </style>
+</head>
+<body>
+
+<div class="dashboard-section">
+    <h2>Question Manager</h2>
+    <div style="background: #f8f9fa; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+        <label>Question Text:</label>
+        <input type="text" id="qText" placeholder="e.g., What does this filter do?" required>
+        
+        <label>Image Filename (Optional - must be inside your 'images' folder):</label>
+        <input type="text" id="qImage" placeholder="e.g., edge_detection.jpg">
+
+        <div class="form-row">
+            <div><label>Option A:</label><input type="text" id="optA" required></div>
+            <div><label>Option B:</label><input type="text" id="optB" required></div>
+        </div>
+        <div class="form-row">
+            <div><label>Option C:</label><input type="text" id="optC" required></div>
+            <div><label>Option D:</label><input type="text" id="optD" required></div>
+        </div>
+
+        <label>Correct Answer:</label>
+        <select id="correctAns">
+            <option value="option_a">Option A</option>
+            <option value="option_b">Option B</option>
+            <option value="option_c">Option C</option>
+            <option value="option_d">Option D</option>
+        </select>
+
+        <button onclick="addQuestion()">Add Question to Exam</button>
+    </div>
+
+    <table id="questionsTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Question</th>
+                <th>Correct Answer</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            </tbody>
+    </table>
+</div>
+
+<div class="dashboard-section">
+    <h2>Live Student Results</h2>
+    <button onclick="loadResults()">Refresh Data</button>
+    <button onclick="exportCSV()">Download CSV</button>
+    <button class="btn-danger" onclick="resetExams()">Clear All Grades</button>
+
+    <table id="resultsTable">
+        <thead>
+            <tr>
+                <th>University ID</th>
+                <th>Name</th>
+                <th>Score</th>
+                <th>Tab Switches</th>
+                <th>Time Submitted</th>
+            </tr>
+        </thead>
+        <tbody>
+            </tbody>
+    </table>
+</div>
+
+<script>
+    // --- QUESTION MANAGER LOGIC ---
+    async function loadQuestions() {
+        const res = await fetch('/api/admin/questions');
+        const questions = await res.json();
+        const tbody = document.querySelector('#questionsTable tbody');
+        tbody.innerHTML = '';
+        questions.forEach(q => {
+            tbody.innerHTML += `
+                <tr>
+                    <td>${q.id}</td>
+                    <td>${q.question_text}</td>
+                    <td>${q.correct_answer.replace('option_', '').toUpperCase()}</td>
+                    <td><button class="btn-danger" style="padding: 5px 10px; margin: 0;" onclick="deleteQuestion(${q.id})">Delete</button></td>
+                </tr>
+            `;
+        });
+    }
+
+    async function addQuestion() {
+        const payload = {
+            question_text: document.getElementById('qText').value,
+            image_url: document.getElementById('qImage').value || null,
+            option_a: document.getElementById('optA').value,
+            option_b: document.getElementById('optB').value,
+            option_c: document.getElementById('optC').value,
+            option_d: document.getElementById('optD').value,
+            correct_answer: document.getElementById('correctAns').value
+        };
+
+        if (!payload.question_text || !payload.option_a || !payload.option_b) {
+            return alert("Please fill in the question and options.");
+        }
+
+        await fetch('/api/admin/questions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        // Clear form
+        document.querySelectorAll('input').forEach(input => input.value = '');
+        loadQuestions();
+    }
+
+    async function deleteQuestion(id) {
+        if (confirm("Delete this question?")) {
+            await fetch(`/api/admin/questions/${id}`, { method: 'DELETE' });
+            loadQuestions();
+        }
+    }
+
+    // --- RESULTS LOGIC ---
+    let currentData = [];
+    async function loadResults() {
+        const response = await fetch('/api/admin/results');
+        currentData = await response.json();
+        const tbody = document.querySelector('#resultsTable tbody');
+        tbody.innerHTML = '';
+        
+        currentData.forEach(row => {
+            tbody.innerHTML += `
+                <tr>
+                    <td>${row.university_id}</td>
+                    <td>${row.name}</td>
+                    <td><strong>${row.score}</strong></td>
+                    <td class="${row.violations > 0 ? 'danger' : ''}">${row.violations}</td>
+                    <td>${new Date(row.timestamp).toLocaleString()}</td>
+                </tr>
+            `;
+        });
+    }
+
+    function exportCSV() {
+        if (currentData.length === 0) return alert("No data to export.");
+        let csvContent = "data:text/csv;charset=utf-8,ID,Name,Score,Violations,Time\n";
+        currentData.forEach(row => {
+            csvContent += `${row.university_id},${row.name},${row.score},${row.violations},${row.timestamp}\n`;
+        });
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "Exam_Results.csv");
+        document.body.appendChild(link);
+        link.click();
+    }
+
+    async function resetExams() {
+        if (confirm("Are you sure? This will delete ALL student grades!")) {
+            await fetch('/api/admin/reset', { method: 'POST' });
+            loadResults();
+        }
+    }
+
+    // Load data when page opens
+    loadQuestions();
+    loadResults();
+</script>
+</body>
+</html>

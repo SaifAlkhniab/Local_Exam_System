@@ -1,0 +1,17 @@
+# Node modules
+node_modules/
+
+# Environment variables (Never upload passwords!)
+.env
+
+# Database file (We don't want to upload real student data)
+exam_system.db
+
+# Uploaded files and temporary images
+uploads/
+images/*
+!images/.keep
+
+# OS generated files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exam Room | SLEP</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #34495e;
+            --accent: #3498db;
+            --bg: #f4f6f9;
+            --danger: #e74c3c;
+            --success: #27ae60;
+            --warning: #f1c40f;
+            --text: #333;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* --- Header / Top Bar --- */
+        .exam-header {
+            background-color: var(--primary);
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .timer {
+            font-size: 24px;
+            font-weight: bold;
+            background: rgba(0,0,0,0.2);
+            padding: 5px 15px;
+            border-radius: 5px;
+            letter-spacing: 2px;
+        }
+
+        .timer.warning { color: var(--warning); }
+        .timer.danger { color: var(--danger); animation: pulse 1s infinite; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        /* --- Main Layout --- */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* --- Question Area --- */
+        .question-area {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            background: white;
+            margin: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .question-header {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 2px solid var(--bg);
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+            color: var(--secondary);
+        }
+
+        .question-text {
+            font-size: 22px;
+            margin-bottom: 25px;
+            line-height: 1.5;
+        }
+
+        .question-image {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none; /* Hidden by default */
+        }
+
+        /* --- Options --- */
+        .options-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .option-label {
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            background: var(--bg);
+            border: 2px solid transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 18px;
+        }
+
+        .option-label:hover { background: #e2e6ea; }
+        
+        .option-label input {
+            margin-right: 15px;
+            transform: scale(1.5);
+            cursor: pointer;
+        }
+
+        /* Highlight selected option */
+        .option-label.selected {
+            border-color: var(--accent);
+            background: #ebf5fb;
+        }
+
+        /* Text Input for FIB */
+        .fib-input {
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+        .fib-input:focus { border-color: var(--accent); outline: none; }
+
+        /* --- Footer / Navigation --- */
+        .exam-footer {
+            background: white;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+        }
+
+        button {
+            padding: 12px 25px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+
+        .btn-nav { background: var(--secondary); color: white; }
+        .btn-nav:hover { background: var(--primary); }
+        .btn-nav:disabled { background: #ccc; cursor: not-allowed; }
+        
+        .btn-submit { background: var(--success); color: white; }
+        .btn-submit:hover { background: #219653; }
+
+        /* --- Screens --- */
+        #startScreen, #finishScreen {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .card {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 500px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="startScreen">
+        <div class="card">
+            <h2 id="startExamTitle">Loading Exam...</h2>
+            <p><strong>Duration:</strong> <span id="startExamDuration">--</span> Minutes</p>
+            <p style="color: var(--danger); font-size: 14px;">Do not refresh the page or switch tabs during the exam.</p>
+            <button class="btn-accent" id="btnStartActualExam" style="background: var(--accent); color: white; width: 100%; margin-top: 20px; display: none;" onclick="startExam()">START EXAM</button>
+        </div>
+    </div>
+
+    <div id="examInterface" style="display: none; flex: 1; flex-direction: column;">
+        
+        <div class="exam-header">
+            <div>
+                <h3 style="margin: 0;" id="examTitleDisplay">Midterm Examination</h3>
+                <small id="studentNameDisplay">Student: John Doe (ID: 123456)</small>
+            </div>
+            <div class="timer" id="timerDisplay">--:--</div>
+        </div>
+
+        <div class="main-container">
+            <div class="question-area">
+                <div class="question-header">
+                    <h3 style="margin:0;" id="qNumberDisplay">Question 1 of 4</h3>
+                    <span id="qPointsDisplay" style="background: #eee; padding: 5px 10px; border-radius: 5px;">2 Points</span>
+                </div>
+
+                <img id="qImage" class="question-image" src="" alt="Question Image">
+
+                <div class="question-text" id="qText">
+                    Loading question...
+                </div>
+
+                <div class="options-list" id="optionsContainer">
+                    </div>
+            </div>
+        </div>
+
+        <div class="exam-footer">
+            <button class="btn-nav" id="btnPrev" onclick="changeQuestion(-1)">&#8592; Previous</button>
+            <button class="btn-submit" id="btnSubmit" onclick="submitExam()" style="display: none;">Submit Exam</button>
+            <button class="btn-nav" id="btnNext" onclick="changeQuestion(1)">Next &#8594;</button>
+        </div>
+
+    </div>
+
+    <div id="finishScreen" style="display: none;">
+        <div class="card">
+            <h2 style="color: var(--success);">Exam Submitted Successfully!</h2>
+            <p>Your answers have been securely recorded.</p>
+            <p>You may now close this window.</p>
+        </div>
+    </div>
+
+    <script>
+        let studentToken = localStorage.getItem('studentToken');
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentExamId = urlParams.get('examId');
+
+        // --- EXAM STATE ---
+        let realQuestions = [];
+        let examDetails = null;
+        let currentIndex = 0;
+        let studentAnswers = {}; 
+        let timeRemaining = 0; 
+        let timerInterval;
+
+        // Security check before anything else
+        if (!studentToken || !currentExamId) {
+            alert("Unauthorized access or missing Exam ID.");
+            window.location.href = '/student_dashboard.html';
+        }
+
+        // 1. Fetch Real Data on Load
+        async function loadExamData() {
+            try {
+                const res = await fetch(`/api/student/exam/${currentExamId}`, {
+                    headers: { 'Authorization': `Bearer ${studentToken}` }
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    examDetails = data.exam;
+                    realQuestions = data.questions;
+                    
+                    if(realQuestions.length === 0) {
+                        alert("This exam has no questions yet!");
+                        window.location.href = '/student_dashboard.html';
+                        return;
+                    }
+
+                    // Populate Start Screen
+                    document.getElementById('startExamTitle').innerText = examDetails.title;
+                    document.getElementById('startExamDuration').innerText = examDetails.duration_minutes;
+                    document.getElementById('btnStartActualExam').style.display = 'block'; // Show start button
+
+                    // Populate Top Bar
+                    document.getElementById('examTitleDisplay').innerText = examDetails.title;
+                    document.getElementById('studentNameDisplay').innerText = `Student: ${localStorage.getItem('studentName')}`;
+                    
+                    timeRemaining = examDetails.duration_minutes * 60;
+                } else {
+                    alert(data.error);
+                    window.location.href = '/student_dashboard.html';
+                }
+            } catch (err) {
+                alert("Failed to load exam data.");
+            }
+        }
+
+        // --- CORE FUNCTIONS ---
+        function startExam() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('examInterface').style.display = 'flex';
+            startTimer();
+            renderQuestion();
+        }
+
+        function startTimer() {
+            const display = document.getElementById('timerDisplay');
+            // Force initial display before interval kicks in
+            updateTimerVisuals(display);
+
+            timerInterval = setInterval(() => {
+                timeRemaining--;
+                updateTimerVisuals(display);
+
+                if (timeRemaining <= 0) {
+                    clearInterval(timerInterval);
+                    alert("Time is up! Submitting automatically.");
+                    submitExam();
+                }
+            }, 1000);
+        }
+
+        function updateTimerVisuals(display) {
+            let minutes = Math.floor(timeRemaining / 60);
+            let seconds = timeRemaining % 60;
+            display.innerText = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+
+            if (timeRemaining < 300) display.className = "timer warning"; 
+            if (timeRemaining < 60) display.className = "timer danger";   
+        }
+
+        function renderQuestion() {
+            const q = realQuestions[currentIndex];
+            
+            document.getElementById('qNumberDisplay').innerText = `Question ${currentIndex + 1} of ${realQuestions.length}`;
+            document.getElementById('qPointsDisplay').innerText = `${q.points} Points`;
+            document.getElementById('qText').innerText = q.question_text;
+
+            const imgEl = document.getElementById('qImage');
+            if (q.image_url) {
+                imgEl.src = q.image_url;
+                imgEl.style.display = 'block';
+            } else {
+                imgEl.style.display = 'none';
+            }
+
+            const container = document.getElementById('optionsContainer');
+            container.innerHTML = ''; 
+
+            if (q.q_type === 'fib') {
+                const savedVal = studentAnswers[q.id] || "";
+                container.innerHTML = `<input type="text" class="fib-input" placeholder="Type your answer here..." value="${savedVal}" oninput="saveAnswer(this.value)">`;
+            } 
+            else {
+                const inputType = q.q_type === 'ma' ? 'checkbox' : 'radio';
+                
+                if (q.options && q.options.length > 0) {
+                    q.options.forEach((opt, i) => {
+                        let isChecked = false;
+                        if (q.q_type === 'ma' && studentAnswers[q.id]) {
+                            isChecked = studentAnswers[q.id].includes(opt);
+                        } else {
+                            isChecked = studentAnswers[q.id] === opt;
+                        }
+
+                        const selectedClass = isChecked ? 'selected' : '';
+                        const checkedAttr = isChecked ? 'checked' : '';
+
+                        container.innerHTML += `
+                            <label class="option-label ${selectedClass}" onclick="updateVisualSelection(this, '${q.q_type}')">
+                                <input type="${inputType}" name="qOption" value="${opt}" ${checkedAttr} onchange="saveAnswer('${opt}', this.checked)">
+                                ${opt}
+                            </label>
+                        `;
+                    });
+                }
+            }
+
+            document.getElementById('btnPrev').disabled = (currentIndex === 0);
+            
+            if (currentIndex === realQuestions.length - 1) {
+                document.getElementById('btnNext').style.display = 'none';
+                document.getElementById('btnSubmit').style.display = 'block';
+            } else {
+                document.getElementById('btnNext').style.display = 'block';
+                document.getElementById('btnSubmit').style.display = 'none';
+            }
+        }
+
+        // --- ANSWER SAVING LOGIC ---
+        function updateVisualSelection(labelEl, type) {
+            if (type !== 'ma') {
+                document.querySelectorAll('.option-label').forEach(el => el.classList.remove('selected'));
+            }
+            if (type === 'ma') labelEl.classList.toggle('selected');
+            else labelEl.classList.add('selected');
+        }
+
+        function saveAnswer(value, isChecked = true) {
+            const q = realQuestions[currentIndex];
+            
+            if (q.q_type === 'ma') {
+                if (!studentAnswers[q.id]) studentAnswers[q.id] = [];
+                if (isChecked) {
+                    if (!studentAnswers[q.id].includes(value)) studentAnswers[q.id].push(value);
+                } else {
+                    studentAnswers[q.id] = studentAnswers[q.id].filter(item => item !== value);
+                }
+            } else {
+                studentAnswers[q.id] = value;
+            }
+            console.log("Current Tracking:", studentAnswers);
+        }
+
+        function changeQuestion(step) {
+            currentIndex += step;
+            renderQuestion();
+        }
+
+        async function submitExam() {
+            clearInterval(timerInterval);
+            
+            // Show loading screen
+            document.getElementById('examInterface').style.display = 'none';
+            const finishScreen = document.getElementById('finishScreen');
+            finishScreen.style.display = 'flex';
+            finishScreen.innerHTML = '<div class="card"><h2>Submitting Exam... Securely saving your answers.</h2></div>';
+
+            try {
+                // Send the answers to the server
+                const res = await fetch(`/api/student/exam/${currentExamId}/submit`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${studentToken}`
+                    },
+                    body: JSON.stringify({ answers: studentAnswers })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    finishScreen.innerHTML = `
+                        <div class="card">
+                            <h2 style="color: var(--success);">Exam Submitted Successfully!</h2>
+                            <p>Your answers have been securely recorded.</p>
+                            <p style="font-size: 20px; margin: 20px 0;"><strong>Your Score:</strong> ${data.score} / ${data.maxScore}</p>
+                            <button class="btn-nav" style="width: 100%; margin-top: 15px;" onclick="window.location.href='/student_dashboard.html'">Return to Dashboard</button>
+                        </div>
+                    `;
+                } else {
+                    finishScreen.innerHTML = `
+                        <div class="card">
+                            <h2 style="color: var(--danger);">Submission Error</h2>
+                            <p>${data.error}</p>
+                            <button class="btn-nav" style="width: 100%; margin-top: 15px;" onclick="window.location.href='/student_dashboard.html'">Return to Dashboard</button>
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                finishScreen.innerHTML = `
+                    <div class="card">
+                        <h2 style="color: var(--danger);">Connection Error</h2>
+                        <p>Failed to connect to the server. Please tell your professor.</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Boot up
+        loadExamData();
+
+    </script>
+</body>
+</html>

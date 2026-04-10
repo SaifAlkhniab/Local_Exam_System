@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SLEP - System Login</title>
+    <style>
+        :root { --primary: #2c3e50; --accent: #8e44ad; --bg: #f4f6f9; --danger: #e74c3c; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .login-card { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 350px; text-align: center; border-top: 5px solid var(--accent); }
+        .login-card h2 { color: var(--primary); margin-top: 0; margin-bottom: 5px; }
+        .login-card p { color: #7f8c8d; font-size: 14px; margin-bottom: 25px; }
+        input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccd1d9; border-radius: 5px; box-sizing: border-box; font-size: 14px; }
+        button { width: 100%; padding: 12px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; color: white; background: var(--accent); font-size: 16px; transition: 0.2s; }
+        button:hover { background: #732d91; }
+        #errorMsg { color: var(--danger); font-size: 13px; margin-top: 10px; display: none; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="login-card">
+        <h2>SLEP Portal</h2>
+        <p>Secure LAN Exam Platform</p>
+        
+        <form id="loginForm">
+            <input type="text" id="username" placeholder="Username or University ID" required autocomplete="username">
+            <input type="password" id="password" placeholder="Password" required autocomplete="current-password">
+            <button type="submit">Log In</button>
+        </form>
+        
+        <div id="errorMsg"></div>
+    </div>
+
+    <script>
+        // Clear any old leftover session tokens when they hit the login page
+        localStorage.removeItem('slep_token');
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errorDiv = document.getElementById('errorMsg');
+            errorDiv.style.display = 'none';
+
+            const payload = {
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value
+            };
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await res.json();
+
+                if (data.success) {
+                    // Save the secure token in the browser
+                    localStorage.setItem('slep_token', data.token);
+                    localStorage.setItem('slep_role', data.role);
+                    
+                    // Route them to their specific dashboard
+                    window.location.href = data.redirect;
+                } else {
+                    errorDiv.innerText = data.error;
+                    errorDiv.style.display = 'block';
+                }
+            } catch (err) {
+                errorDiv.innerText = "Server connection failed.";
+                errorDiv.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

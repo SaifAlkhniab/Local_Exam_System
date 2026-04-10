@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Professor Dashboard</title>
+    <style>
+        :root { --primary: #2c3e50; --secondary: #34495e; --accent: #2980b9; --bg: #f4f6f9; --danger: #e74c3c; --success: #27ae60; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Layout & Collapsibles */
+        .sidebar { width: 250px; background: var(--primary); color: white; display: flex; flex-direction: column; transition: width 0.3s ease; white-space: nowrap; overflow: hidden; }
+        .sidebar.collapsed { width: 0; }
+        .sidebar h2 { text-align: center; padding: 20px 0; margin: 0; background: #1a252f; font-size: 20px; }
+        .nav-btn { padding: 15px 20px; background: none; border: none; color: white; text-align: left; cursor: pointer; font-size: 16px; border-bottom: 1px solid var(--secondary); transition: 0.2s; }
+        .nav-btn:hover, .nav-btn.active { background: var(--accent); }
+        .logout-btn { margin-top: auto; background: var(--danger); }
+        
+        .content-area { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        .top-bar { background: white; padding: 10px 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 15px; z-index: 10; }
+        .toggle-btn { background: var(--secondary); color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .toggle-btn:hover { background: var(--primary); }
+        
+        .main { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 4px solid var(--accent); flex: 1; transition: 0.3s ease; }
+        .groups-panel { max-width: 350px; min-width: 250px; }
+        .groups-panel.collapsed { display: none; }
+        
+        h3 { margin-top: 0; color: var(--primary); border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        input, select { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { padding: 8px 12px; border: none; border-radius: 4px; background: var(--accent); color: white; cursor: pointer; font-weight: bold; }
+        button:hover { opacity: 0.9; }
+        
+        /* Scrollable Table CSS */
+        .table-container { max-height: 350px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px; margin-top: 15px; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; position: sticky; top: 0; z-index: 1; box-shadow: 0 2px 2px -1px rgba(0,0,0,0.1); }
+        
+        .group-item { padding: 10px; border: 1px solid #eee; margin-bottom: 5px; cursor: pointer; border-radius: 4px; background: #fafafa; display: flex; justify-content: space-between; align-items: center; }
+        .group-item:hover, .group-item.active { background: #e0f7fa; border-color: #00bcd4; }
+        .btn-danger { background: var(--danger); width: auto; padding: 5px 10px; font-size: 12px; }
+
+        /* Tabs CSS */
+        .tab-content { display: none; width: 100%; }
+        .tab-content.active { display: flex; gap: 20px; align-items: flex-start; }
+        .flex-1 { flex: 1; }
+
+        /* Temporarily hiding the Edit Question button */
+        button[onclick^="editQuestion"],
+        button[onclick^="startEdit"] {
+            display: none !important;
+}        
+    </style>
+</head>
+<body>
+
+    <div class="sidebar" id="mainSidebar">
+        <h2>Professor Portal</h2>
+        <button class="nav-btn active" onclick="switchTab('groupsTab', this)">👥 Groups & Students</button>
+        <button class="nav-btn" onclick="switchTab('examsTab', this)">📝 Exam Builder</button>
+        <button class="nav-btn" onclick="alert('Results coming soon!')">📊 Results</button>
+        <button class="nav-btn logout-btn" onclick="logout()">🚪 Logout</button>
+    </div>
+
+    <div class="content-area">
+        <div class="top-bar">
+            <button class="toggle-btn" onclick="document.getElementById('mainSidebar').classList.toggle('collapsed')">☰ Menu</button>
+            <button class="toggle-btn" style="background: var(--accent);" onclick="document.getElementById('groupsPanel').classList.toggle('collapsed')">☰ My Groups</button>
+        </div>
+
+        <div class="main">
+            <div id="groupsTab" class="tab-content active">
+                <div class="card groups-panel" id="groupsPanel">
+                    <h3>1. My Groups</h3>
+                    <div style="display:flex; gap:5px; margin-bottom: 15px;">
+                        <input type="text" id="newGroupName" placeholder="E.g., CS101 Fall 2026" style="margin-bottom:0;">
+                        <button onclick="createGroup()">Add</button>
+                    </div>
+                    <div id="groupsList"></div>
+                </div>
+
+                <div class="card flex-1" id="studentSection" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px;">
+                        <h3 style="border:none; padding:0; margin:0;">2. Students in: <span id="currentGroupName" style="color:var(--accent);"></span></h3>
+                        <button onclick="exportStudentsCsv()" style="background: #34495e;">Export Current Class</button>
+                    </div>
+                    
+                    <div style="display: flex; gap: 20px;">
+                        <div style="flex: 1; border-right: 1px solid #eee; padding-right: 20px;">
+                            <h4>Add Single Student</h4>
+                            <input type="text" id="studID" placeholder="University ID (e.g. 2026001)">
+                            <input type="text" id="studName" placeholder="Student Name">
+                            <input type="password" id="studPass" placeholder="Password">
+                            <button onclick="addStudent()" style="width: 100%;">Add Student</button>
+                        </div>
+                        <div style="flex: 1;">
+                            <h4>Bulk CSV Import</h4>
+                            <button onclick="downloadStudentTemplate()" style="background: #f39c12; margin-bottom: 15px; width: 100%;">Download Template</button>
+                            <input type="file" id="studCsvFile" accept=".csv">
+                            <button onclick="uploadStudentCsv()" style="background: #27ae60; width: 100%;">Upload CSV</button>
+                        </div>
+                    </div>
+
+                    <input type="text" id="studentSearch" onkeyup="filterStudents()" placeholder="🔍 Search by Name or University ID..." style="margin-top: 20px; border: 2px solid var(--accent);">
+
+                    <div class="table-container">
+                        <table id="studentsTable">
+                            <tr><th>#</th><th>Univ ID</th><th>Name</th><th>Status</th><th>Actions</th></tr>
+                            </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="examsTab" class="tab-content">
+                <div class="card groups-panel" id="examPanel">
+                    <h3>Create New Exam</h3>
+                    <select id="examGroupSelect"><option value="">Loading Groups...</option></select>
+                    <input type="text" id="examTitle" placeholder="Exam Title (e.g. Midterm 1)">
+                    <input type="number" id="examDuration" placeholder="Duration (Minutes)">
+                    <div style="display:flex; gap: 15px; margin-bottom: 15px; font-size: 14px;">
+                        <label><input type="checkbox" id="shuffleQs" checked> Shuffle Questions</label>
+                        <label><input type="checkbox" id="shuffleOpts" checked> Shuffle Options</label>
+                    </div>
+                    <button onclick="createExam()" style="width: 100%; background: var(--success);">Create Exam</button>
+                    
+                    <h3 style="margin-top: 20px;">My Exams</h3>
+                    <div id="examsList" style="max-height: 350px; overflow-y: auto; border: 1px solid #eee; padding: 5px; border-radius: 4px;"></div>
+                </div>
+
+                <div class="card flex-1" id="questionBuilder" style="display: none; display: flex; flex-direction: column;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3>Questions for: <span id="currentExamName" style="color:var(--accent);"></span></h3>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="file" id="examZipFile" accept=".zip" style="width: auto; margin: 0; padding: 5px;">
+                            <button onclick="uploadExamZip()" style="background: #27ae60;">Upload ZIP</button>
+                            <button onclick="exportExamZip()" style="background: #34495e;">⬆️ Export ZIP</button>
+                            <button onclick="downloadZipTemplate()" style="background: #f39c12;">⬇️ Template</button>
+                        </div>
+                    </div>
+                    
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #ddd;">
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                            <select id="qType" onchange="renderOptionsUI()" style="flex: 1; margin-bottom:0;">
+                                <option value="mcq">Multiple Choice (1 Correct)</option>
+                                <option value="ma">Multiple Answer (Checkbox)</option>
+                                <option value="tf">True / False</option>
+                                <option value="fib">Fill in the Blank</option>
+                            </select>
+                            <input type="number" id="qPoints" value="1" placeholder="Pts" style="width: 80px; margin-bottom:0;">
+                        </div>
+                        
+                        <textarea id="qText" placeholder="Type your question here... (Long text supported)" style="width: 100%; height: 80px; padding: 10px; border-radius: 4px; border: 1px solid #ccc; margin-bottom: 10px; resize: vertical; box-sizing:border-box;"></textarea>
+                        
+                        <div style="margin-bottom: 10px;">
+                            <label style="font-size: 12px; font-weight: bold; color: var(--secondary);">Attach Image (Optional):</label>
+                            <input type="file" id="qImage" accept="image/*" style="margin-bottom: 0; padding: 5px;">
+                        </div>
+
+                        <div id="dynamicOptionsContainer" style="border-top: 1px dashed #ccc; padding-top: 10px; margin-bottom: 10px;"></div>
+                        
+                        <div style="display: flex; gap: 10px;">
+                            <button id="saveQuestionBtn" onclick="addQuestion()" style="flex: 1;">+ Save Question</button>
+                            <button id="cancelEditBtn" onclick="cancelEdit()" style="background: #7f8c8d; display: none;">Cancel Edit</button>
+                        </div>
+                    </div>
+
+                    <div class="table-container" style="flex-grow: 1;">
+                        <table id="questionsTable">
+                            <tr><th>#</th><th>Type</th><th>Question</th><th>Answer</th><th>Pts</th><th>Act</th></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+<script>
+    const token = localStorage.getItem('slep_token');
+    if (!token || localStorage.getItem('slep_role') !== 'professor') window.location.href = '/';
+
+    let currentGroupId = null;
+    let currentStudentsData = []; 
+    let globalGroups = [];
+    let currentExamId = null;
+
+    async function apiCall(endpoint, options = {}) {
+        options.headers = options.headers || {};
+        if (!(options.body instanceof FormData)) options.headers['Content-Type'] = 'application/json';
+        options.headers['Authorization'] = `Bearer ${token}`; 
+        const res = await fetch(endpoint, options);
+        if (res.status === 401 || res.status === 403) logout();
+        return res.json();
+    }
+
+    function logout() { localStorage.clear(); window.location.href = '/'; }
+
+    // --- TAB SWITCHER ---
+    function switchTab(tabId, btnElement) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        btnElement.classList.add('active');
+        if(tabId === 'examsTab') loadExamsAndGroups();
+    }
+
+    // --- LIVE SEARCH FILTER ---
+    function filterStudents() {
+        const input = document.getElementById('studentSearch').value.toLowerCase();
+        const table = document.getElementById('studentsTable');
+        const trs = table.getElementsByTagName('tr');
+
+        // Loop through rows (skip the first row which is headers)
+        for (let i = 1; i < trs.length; i++) {
+            const idTd = trs[i].getElementsByTagName('td')[1]; // Column 2: Univ ID
+            const nameTd = trs[i].getElementsByTagName('td')[2]; // Column 3: Name
+            if (idTd || nameTd) {
+                const idVal = idTd.textContent || idTd.innerText;
+                const nameVal = nameTd.textContent || nameTd.innerText;
+                if (idVal.toLowerCase().indexOf(input) > -1 || nameVal.toLowerCase().indexOf(input) > -1) {
+                    trs[i].style.display = "";
+                } else {
+                    trs[i].style.display = "none";
+                }
+            }       
+        }
+    }
+
+    // --- GROUPS LOGIC ---
+    async function loadGroups() {
+        const groups = await apiCall('/api/prof/groups');
+        const list = document.getElementById('groupsList');
+        list.innerHTML = '';
+        groups.forEach(g => {
+            const div = document.createElement('div');
+            div.className = `group-item ${g.id === currentGroupId ? 'active' : ''}`;
+            div.innerHTML = `
+                <span onclick="selectGroup(${g.id}, '${g.name}')" style="flex-grow:1; font-weight:bold;">${g.name}</span>
+                <button style="background:var(--danger); padding:2px 8px; font-size:12px;" onclick="deleteGroup(${g.id}, '${g.name}')">Delete</button>
+            `;
+            list.appendChild(div);
+        });
+    }
+
+    async function createGroup() {
+        const name = document.getElementById('newGroupName').value;
+        if(!name) return;
+        await apiCall('/api/prof/groups', { method: 'POST', body: JSON.stringify({ name }) });
+        document.getElementById('newGroupName').value = '';
+        loadGroups();
+    }
+
+    async function deleteGroup(id, name) {
+        if(!confirm(`Delete group "${name}"? This will not delete the student accounts globally, but will remove them from this class.`)) return;
+        await apiCall(`/api/prof/groups/${id}`, { method: 'DELETE' });
+        if(currentGroupId === id) { currentGroupId = null; document.getElementById('studentSection').style.display = 'none'; }
+        loadGroups();
+    }
+
+    function selectGroup(id, name) {
+        currentGroupId = id;
+        document.getElementById('currentGroupName').innerText = name;
+        document.getElementById('studentSection').style.display = 'block';
+        document.getElementById('studentSearch').value = ''; // Clear search on new group load
+        loadGroups();
+        loadStudents();
+    }
+
+    // --- STUDENTS LOGIC ---
+    async function loadStudents() {
+        if(!currentGroupId) return;
+        currentStudentsData = await apiCall(`/api/prof/groups/${currentGroupId}/students`);
+        const table = document.getElementById('studentsTable');
+        table.innerHTML = `<tr><th>#</th><th>Univ ID</th><th>Name</th><th>Status</th><th>Actions</th></tr>`;
+        
+        currentStudentsData.forEach((s, index) => {
+            const statusBadge = s.is_active 
+                ? `<span style="background:#27ae60; color:white; padding:3px 8px; border-radius:12px; font-size:12px;">Active</span>` 
+                : `<span style="background:#7f8c8d; color:white; padding:3px 8px; border-radius:12px; font-size:12px;">Disabled</span>`;
+            const toggleColor = s.is_active ? "#f39c12" : "#2980b9";
+
+            table.innerHTML += `<tr>
+                <td>${index + 1}</td>
+                <td>${s.university_id}</td>
+                <td><strong>${s.name}</strong></td>
+                <td>${statusBadge}</td>
+                <td style="display: flex; gap: 5px;">
+                    <button style="background:#8e44ad; width:auto; padding:5px 10px; font-size:12px;" onclick="resetStudentPassword(${s.id}, '${s.university_id}')">Reset Pass</button>
+                    <button style="background:${toggleColor}; width:auto; padding:5px 10px; font-size:12px;" onclick="toggleStudent(${s.id})">${s.is_active ? "Disable" : "Enable"}</button>
+                    <button class="btn-danger" onclick="removeStudent(${s.id}, '${s.name}')">Remove</button>
+                </td>
+            </tr>`;
+        });
+    }
+
+    async function toggleStudent(id) { await apiCall(`/api/prof/students/${id}/toggle`, { method: 'POST' }); loadStudents(); }
+    
+    async function removeStudent(studentId, name) {
+        if(!confirm(`Remove ${name} from this group?`)) return;
+        await apiCall(`/api/prof/groups/${currentGroupId}/students/${studentId}`, { method: 'DELETE' });
+        loadStudents();
+    }
+
+    async function resetStudentPassword(id, univ_id) {
+        const newPassword = prompt(`Enter a new password for Student ${univ_id}:`);
+        if (!newPassword) return;
+        const res = await apiCall(`/api/prof/students/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ newPassword }) });
+        if (res.success) alert(`Password for ${univ_id} updated successfully!`);
+    }
+
+    async function addStudent() {
+        const payload = { group_id: currentGroupId, university_id: document.getElementById('studID').value, name: document.getElementById('studName').value, password: document.getElementById('studPass').value };
+        if(!payload.university_id || !payload.name || !payload.password) return alert("Fill all fields");
+        const res = await apiCall('/api/prof/students', { method: 'POST', body: JSON.stringify(payload) });
+        if(res.success) { document.getElementById('studID').value = ''; document.getElementById('studName').value = ''; document.getElementById('studPass').value = ''; loadStudents(); } 
+        else alert(res.error);
+    }
+
+    async function uploadStudentCsv() {
+        const fileInput = document.getElementById('studCsvFile');
+        if (!fileInput.files[0] || !currentGroupId) return alert("Please select a CSV");
+        const formData = new FormData(); formData.append('csvfile', fileInput.files[0]); formData.append('group_id', currentGroupId);
+        const res = await apiCall('/api/prof/import-students', { method: 'POST', body: formData });
+        if(res.success) { alert(res.message); loadStudents(); }
+    }
+
+    function downloadStudentTemplate() {
+        const csvContent = "\uFEFFuniversity_id,password,name\n2026001,pass123,محمد علي\n2026002,pass456,سارة أحمد";
+        const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })); link.download = "Students_Upload_Template.csv";
+        document.body.appendChild(link); link.click(); link.remove();
+    }
+
+    function exportStudentsCsv() {
+        let csv = "\uFEFFuniversity_id,name\n";
+        currentStudentsData.forEach(s => csv += `${s.university_id},${s.name}\n`);
+        const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })); link.download = `${document.getElementById('currentGroupName').innerText}_Students.csv`;
+        document.body.appendChild(link); link.click(); link.remove();
+    }
+
+// ================= EXAMS LOGIC (Upgraded) =================
+    async function loadExamsAndGroups() {
+        globalGroups = await apiCall('/api/prof/groups');
+        const sel = document.getElementById('examGroupSelect');
+        sel.innerHTML = '<option value="">Select a Group...</option>';
+        globalGroups.forEach(g => sel.innerHTML += `<option value="${g.id}">${g.name}</option>`);
+
+        const exams = await apiCall('/api/prof/exams');
+        const list = document.getElementById('examsList');
+        list.innerHTML = '';
+        exams.forEach(e => {
+            const statusColor = e.is_active ? 'var(--success)' : '#7f8c8d';
+            list.innerHTML += `
+            <div style="padding: 10px; border: 1px solid #eee; margin-bottom: 5px; cursor: pointer; border-left: 4px solid ${statusColor}; background: #fafafa; display: flex; justify-content: space-between;">
+                <div onclick="selectExam(${e.id}, '${e.title}')">
+                    <strong>${e.title}</strong><br>
+                    <small>${e.group_name} | ${e.duration_minutes}m | ${e.shuffle_questions ? '🔀 Shuffled' : 'Standard'}</small>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:5px;">
+                    <button style="background: #2980b9; font-size:12px; padding: 4px 8px;" onclick="window.open('/professor_results.html?examId=${e.id}', '_blank')">📊 Results</button>
+                    <button onclick="toggleExam(${e.id})" style="background:${statusColor}; font-size:12px; padding: 4px 8px;">${e.is_active ? 'Active' : 'Draft'}</button>
+                    <button onclick="deleteExam(${e.id})" class="btn-danger">Delete</button>
+                </div>
+            </div>`;
+        });
+    }
+
+    async function createExam() {
+        const payload = { 
+            group_id: document.getElementById('examGroupSelect').value, 
+            title: document.getElementById('examTitle').value, 
+            duration_minutes: document.getElementById('examDuration').value,
+            shuffle_questions: document.getElementById('shuffleQs').checked,
+            shuffle_options: document.getElementById('shuffleOpts').checked
+        };
+        if(!payload.group_id || !payload.title || !payload.duration_minutes) return alert("Fill all fields");
+        await apiCall('/api/prof/exams', { method: 'POST', body: JSON.stringify(payload) });
+        loadExamsAndGroups();
+    }
+
+    async function deleteExam(id) {
+        if(!confirm("Are you sure you want to delete this ENTIRE exam and all its questions?")) return;
+        await apiCall(`/api/prof/exams/${id}`, { method: 'DELETE' });
+        if(currentExamId === id) document.getElementById('questionBuilder').style.display = 'none';
+        loadExamsAndGroups();
+    }
+
+    async function toggleExam(id) { await apiCall(`/api/prof/exams/${id}/toggle`, { method: 'POST' }); loadExamsAndGroups(); }
+
+    function selectExam(id, title) {
+        currentExamId = id;
+        document.getElementById('currentExamName').innerText = title;
+        document.getElementById('questionBuilder').style.display = 'flex';
+        renderOptionsUI();
+        loadQuestions();
+    }
+
+    // --- Dynamic Options UI Builder ---
+    let optionCount = 0;
+    function renderOptionsUI() {
+        const type = document.getElementById('qType').value;
+        const container = document.getElementById('dynamicOptionsContainer');
+        container.innerHTML = '';
+        optionCount = 0;
+
+        if (type === 'fib') {
+            container.innerHTML = `<label><strong>Correct Answer(s):</strong> <small>(For multi-blanks like "[blank]", separate answers with commas e.g. 42, Matrix, 15)</small></label><input type="text" id="fibAnswer" placeholder="e.g. 42, Matrix" style="width:100%;">`;
+        } else if (type === 'tf') {
+            container.innerHTML = `
+                <label><strong>Select Correct Answer:</strong></label><br>
+                <input type="radio" name="tfCorrect" value="True" checked> True &nbsp;&nbsp;
+                <input type="radio" name="tfCorrect" value="False"> False
+            `;
+        } else {
+            // MCQ or Multiple Answer
+            container.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <label><strong>Define Options & Mark Correct Answer(s):</strong></label>
+                    <button onclick="addOptionRow()" style="background:var(--secondary); padding:4px 8px; font-size:12px;">+ Add Option</button>
+                </div>
+                <div id="optionsList" style="margin-top:10px;"></div>
+            `;
+            // Add 4 defaults
+            for(let i=0; i<4; i++) addOptionRow();
+        }
+    }
+
+    function addOptionRow() {
+        const type = document.getElementById('qType').value;
+        const list = document.getElementById('optionsList');
+        const inputType = type === 'mcq' ? 'radio' : 'checkbox';
+        const div = document.createElement('div');
+        div.style = "display:flex; gap:10px; margin-bottom:5px; align-items:center;";
+        div.innerHTML = `
+            <input type="${inputType}" name="correctOpt" value="${optionCount}" style="width:20px;">
+            <input type="text" class="optText" placeholder="Option text..." style="flex:1; margin-bottom:0;">
+            <button onclick="this.parentElement.remove()" class="btn-danger" style="margin-bottom:0;">X</button>
+        `;
+        list.appendChild(div);
+        optionCount++;
+    }
+
+    function editQuestion(index) {
+        const q = currentQuestions[index];
+        editingQuestionId = q.id;
+        
+        document.getElementById('qType').value = q.q_type || 'mcq';
+        document.getElementById('qText').value = q.question_text;
+        document.getElementById('qPoints').value = q.points;
+        
+        // Update Buttons
+        document.getElementById('saveQuestionBtn').innerText = "💾 Update Question";
+        document.getElementById('saveQuestionBtn').style.background = "#f39c12";
+        if(document.getElementById('cancelEditBtn')) document.getElementById('cancelEditBtn').style.display = "block";
+        
+        renderOptionsUI(); // Reset UI layout for the selected question type
+        
+        if (q.q_type === 'fib') {
+            document.getElementById('fibAnswer').value = q.correct_answer;
+        } else if (q.q_type === 'tf') {
+            const radio = document.querySelector(`input[name="tfCorrect"][value="${q.correct_answer}"]`);
+            if (radio) radio.checked = true;
+        } else {
+            // Re-populate dynamic MCQ/MA options
+            const list = document.getElementById('optionsList');
+            list.innerHTML = ''; optionCount = 0; 
+            
+            let parsedOpts = [];
+            try { parsedOpts = JSON.parse(q.options); } catch(e){}
+            
+            let correctArr = [];
+            try { correctArr = q.q_type === 'ma' ? JSON.parse(q.correct_answer) : [q.correct_answer]; } 
+            catch(e) { correctArr = [q.correct_answer]; }
+
+            parsedOpts.forEach((optText, idx) => {
+                addOptionRow(); // Spawns an empty input row
+                const texts = document.querySelectorAll('.optText');
+                const checks = document.querySelectorAll('input[name="correctOpt"]');
+                texts[idx].value = optText; // Fill the text
+                if (correctArr.includes(optText)) checks[idx].checked = true; // Check if correct
+            });
+        }
+    }
+
+    function cancelEdit() {
+        editingQuestionId = null;
+        document.getElementById('qType').value = 'mcq';
+        document.getElementById('qText').value = '';
+        document.getElementById('qPoints').value = '1';
+        if(document.getElementById('qImage')) document.getElementById('qImage').value = '';
+        
+        document.getElementById('saveQuestionBtn').innerText = "+ Save Question";
+        document.getElementById('saveQuestionBtn').style.background = "var(--accent)";
+        if(document.getElementById('cancelEditBtn')) document.getElementById('cancelEditBtn').style.display = "none";
+        renderOptionsUI();
+    }
+
+    async function addQuestion() {
+        const type = document.getElementById('qType').value;
+        const qText = document.getElementById('qText').value.trim();
+        const qPoints = document.getElementById('qPoints').value || 1;
+        
+        if (!qText) return alert("Please enter the question text.");
+
+        let optionsArr = [];
+        let correctAns = "";
+
+        if (type === 'fib') {
+            correctAns = document.getElementById('fibAnswer').value;
+        } else if (type === 'tf') {
+            optionsArr = ["True", "False"];
+            correctAns = document.querySelector('input[name="tfCorrect"]:checked').value;
+        } else {
+            const texts = document.querySelectorAll('.optText');
+            const checks = document.querySelectorAll('input[name="correctOpt"]');
+            let correctIndexes = [];
+            
+            texts.forEach((t, i) => { 
+                if(t.value.trim() !== '') {
+                    optionsArr.push(t.value.trim());
+                    if(checks[i] && checks[i].checked) correctIndexes.push(t.value.trim());
+                }
+            });
+            correctAns = type === 'mcq' ? correctIndexes[0] : JSON.stringify(correctIndexes);
+        }
+
+        const formData = new FormData();
+        formData.append('exam_id', currentExamId);
+        formData.append('q_type', type);
+        formData.append('question_text', qText);
+        formData.append('options', JSON.stringify(optionsArr));
+        formData.append('correct_answer', correctAns || "");
+        formData.append('points', qPoints);
+        
+        const fileInput = document.getElementById('qImage');
+        if (fileInput && fileInput.files[0]) formData.append('image', fileInput.files[0]);
+
+        const url = editingQuestionId ? `/api/prof/questions/${editingQuestionId}` : '/api/prof/questions';
+        const method = editingQuestionId ? 'PUT' : 'POST';
+
+        try {
+            const res = await fetch(url, {
+                method: method,
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData 
+            });
+
+            const result = await res.json();
+            
+            if(res.ok && result.success) {
+                // AWAIT the list reload BEFORE clearing the form, so the UI instantly updates
+                await loadQuestions(); 
+                
+                if (typeof cancelEdit === 'function') cancelEdit();
+                else {
+                    document.getElementById('qText').value = '';
+                    if(fileInput) fileInput.value = '';
+                    renderOptionsUI();
+                }
+            } else { 
+                alert("Server Error: " + (result.error || "Failed to save question.")); 
+            }
+        } catch(error) {
+            alert("Network Error: " + error.message);
+        }
+    }
+
+    let currentQuestions = [];
+    let editingQuestionId = null;
+
+    async function loadQuestions() {
+        if(!currentExamId) return;
+        // Cache Buster: ?t=${Date.now()} forces the browser to fetch fresh data!
+        currentQuestions = await apiCall(`/api/prof/exams/${currentExamId}/questions?t=${Date.now()}`);
+        const table = document.getElementById('questionsTable');
+        table.innerHTML = `<tr><th>#</th><th>Type</th><th>Question</th><th>Answer</th><th>Pts</th><th>Act</th></tr>`;
+        currentQuestions.forEach((q, i) => { 
+            const hasImg = q.image_url ? '🖼️<br>' : '';
+            const qTextHtml = `<div style="max-height:80px; overflow-y:auto; word-wrap:break-word; max-width: 250px;">${hasImg}${q.question_text}</div>`;
+            table.innerHTML += `<tr>
+                <td>${i+1}</td>
+                <td><span style="background:#eee; padding:2px 5px; border-radius:4px; font-size:11px;">${q.q_type.toUpperCase()}</span></td>
+                <td>${qTextHtml}</td>
+                <td><strong>${q.correct_answer}</strong></td>
+                <td>${q.points}</td>
+                <td style="display:flex; gap:5px;">
+                    <button style="background:#f39c12; padding:2px 5px; width:auto;" onclick="editQuestion(${i})">Edit</button>
+                    <button class="btn-danger" style="padding:2px 5px; width:auto;" onclick="deleteQuestion(${q.id})">Del</button>
+                </td>
+            </tr>`; 
+        });
+    }
+
+    async function deleteQuestion(id) {
+        if(confirm("Delete question?")) { await apiCall(`/api/prof/questions/${id}`, { method: 'DELETE' }); loadQuestions(); }
+    }
+
+    async function exportExamZip() {
+        if(!currentExamId) return alert("Select an exam first!");
+        
+        // Fetch securely with token
+        const res = await fetch(`/api/prof/exams/${currentExamId}/export-zip`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!res.ok) return alert("Export failed");
+        
+        // Convert to downloadable file
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = window.URL.createObjectURL(blob);
+        a.download = `Exam_${document.getElementById('currentExamName').innerText.replace(/\s+/g, '_')}.zip`;
+        document.body.appendChild(a); 
+        a.click(); 
+        a.remove();
+    }
+    
+    async function uploadExamZip() {
+        const fileInput = document.getElementById('examZipFile');
+        if (!fileInput.files[0] || !currentExamId) return alert("Select a ZIP file first.");
+        
+        const formData = new FormData();
+        formData.append('zipfile', fileInput.files[0]);
+        
+        const res = await apiCall(`/api/prof/exams/${currentExamId}/import-zip`, { method: 'POST', body: formData });
+        if(res.success) { 
+            alert(res.message); 
+            fileInput.value = ''; // clear input
+            loadQuestions(); 
+        } else alert(res.error);
+    }
+
+    async function downloadZipTemplate() {
+        // Fetch securely with token
+        const res = await fetch('/api/prof/template-zip', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!res.ok) return alert("Download failed");
+        
+        // Convert to downloadable file
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Exam_Import_Template.zip';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    }
+
+    function previewExam() { alert("Preview Student Interface Overlay Coming Next!"); 
+
+    }
+    // Init
+    loadGroups();
+</script>
+</body>
+</html>

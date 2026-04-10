@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SLEP - Professor Dashboard</title>
+    <style>
+        /* Modern Desktop-First Offline CSS */
+        :root { --primary: #2c3e50; --secondary: #34495e; --accent: #3498db; --success: #27ae60; --danger: #e74c3c; --warning: #f1c40f; --bg: #f4f6f9; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); margin: 0; padding: 0; color: #333; }
+        
+        /* Navbar */
+        .navbar { background: var(--primary); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .navbar h1 { margin: 0; font-size: 22px; font-weight: 600; }
+        .navbar span { font-size: 14px; background: var(--danger); padding: 5px 10px; border-radius: 4px; font-weight: bold; }
+
+        /* Main Layout Grid */
+        .container { padding: 30px; max-width: 1600px; margin: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+        .full-width { grid-column: 1 / -1; }
+        
+        /* Cards */
+        .card { background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); padding: 25px; border-top: 4px solid var(--accent); }
+        .card h2 { margin-top: 0; color: var(--primary); font-size: 18px; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        
+        /* Form Elements */
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: 600; margin-bottom: 5px; font-size: 14px; color: var(--secondary); }
+        input, select { width: 100%; padding: 10px 12px; border: 1px solid #ccd1d9; border-radius: 5px; box-sizing: border-box; font-size: 14px; transition: border 0.3s; }
+        input:focus, select:focus { border-color: var(--accent); outline: none; }
+        .row { display: flex; gap: 15px; }
+        .row > div { flex: 1; }
+
+        /* Buttons */
+        button { padding: 10px 20px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; transition: opacity 0.2s; color: white; background: var(--accent); }
+        button:hover { opacity: 0.9; }
+        .btn-success { background: var(--success); }
+        .btn-danger { background: var(--danger); }
+        .btn-warning { background: var(--warning); color: #333; }
+        
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; color: var(--primary); font-weight: 600; }
+        tr:hover { background: #fbfbfc; }
+        .badge { padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .badge-red { background: #fadbd8; color: #c0392b; }
+        .badge-green { background: #d5f5e3; color: #27ae60; }
+    </style>
+</head>
+<body>
+
+<script>
+    if(prompt("Admin Authentication Required:") !== "admin123") { document.body.innerHTML = "<h1 style='text-align:center; margin-top:50px;'>Access Denied</h1>"; throw new Error("Stop"); }
+</script>
+
+<div class="navbar">
+    <h1>SLEP Dashboard (University Lab Mode)</h1>
+    <span>Secure Offline Mode</span>
+</div>
+
+<div class="container">
+
+    <div class="card">
+        <h2>1. Exam Controller</h2>
+        <div class="row">
+            <div>
+                <label>New Exam Title</label>
+                <input type="text" id="exTitle" placeholder="e.g., Midterm Lab 1">
+            </div>
+            <div style="flex: 0.5;">
+                <label>Minutes</label>
+                <input type="number" id="exMins" placeholder="45">
+            </div>
+        </div>
+        <button onclick="createExam()" style="margin-top: 15px;">+ Create New Exam</button>
+        
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+        
+        <label>Select Exam to Manage:</label>
+        <div class="row">
+            <select id="examSelector"></select>
+            <button onclick="toggleExam()" class="btn-success">Activate Selected</button>
+            <button onclick="stopAllExams()" class="btn-danger">Stop All</button>
+        </div>
+    </div>
+
+    <div class="card" style="border-top-color: var(--success);">
+        <h2>⚡ Bulk Import Questions</h2>
+        <p style="font-size: 13px; color: #666; margin-top: 0;">Download the CSV template, fill your questions, and upload.</p>
+        <div class="row" style="align-items: center;">
+            <button onclick="downloadCsvTemplate()" class="btn-warning">1. Download Template</button>
+            <input type="file" id="csvFileInput" accept=".csv" style="padding: 6px;">
+            <button onclick="uploadCsv()" class="btn-success">2. Import CSV</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>2. Register Student Access</h2>
+        <div class="row">
+            <div>
+                <label>University ID</label>
+                <input type="text" id="stuId" placeholder="e.g., 2024001">
+            </div>
+            <div>
+                <label>Full Name</label>
+                <input type="text" id="stuName" placeholder="Student Name">
+            </div>
+        </div>
+        <button onclick="addStudent()" style="margin-top: 15px;">Register Student</button>
+    </div>
+
+    <div class="card">
+        <h2>3. Manual Question Entry</h2>
+        <div class="row">
+            <div>
+                <label>Question Type</label>
+                <select id="qType" onchange="document.getElementById('mcqOpts').style.display = this.value === 'mcq' ? 'block' : 'none'">
+                    <option value="mcq">Multiple Choice</option>
+                    <option value="fill">Fill in the Blank</option>
+                </select>
+            </div>
+            <div style="flex: 0.5;">
+                <label>Points</label>
+                <input type="number" id="qPts" value="1">
+            </div>
+        </div>
+        
+        <div class="form-group" style="margin-top: 10px;">
+            <label>Question Text</label>
+            <input type="text" id="qText" placeholder="Enter the question here...">
+        </div>
+        
+        <div class="form-group">
+            <label>Upload Reference Image (Optional)</label>
+            <input type="file" id="qImageFile" style="padding: 6px;">
+        </div>
+
+        <div id="mcqOpts" style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 10px;">
+            <div class="row">
+                <div class="form-group"><label>Option A</label><input type="text" id="optA"></div>
+                <div class="form-group"><label>Option B</label><input type="text" id="optB"></div>
+            </div>
+            <div class="row">
+                <div class="form-group"><label>Option C</label><input type="text" id="optC"></div>
+                <div class="form-group"><label>Option D</label><input type="text" id="optD"></div>
+            </div>
+            <label>Correct Answer:</label>
+            <select id="mcqAns">
+                <option value="option_a">Option A</option><option value="option_b">Option B</option>
+                <option value="option_c">Option C</option><option value="option_d">Option D</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>Correct Answer (If Fill-in-the-Blank)</label>
+            <input type="text" id="fillAns" placeholder="Exact text to match...">
+        </div>
+        <button onclick="addQuestion()">Save Question to Exam</button>
+    </div>
+
+    <div class="card full-width" style="border-top-color: var(--primary);">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="border: none; margin: 0; padding: 0;">4. Live Student Results</h2>
+            <div>
+                <button onclick="loadResults()" style="background: #95a5a6;">Refresh Data</button>
+                <button onclick="exportCsv()" class="btn-warning" style="margin-left: 10px;">Export Results (CSV)</button>
+            </div>
+        </div>
+        <table id="resultsTable">
+            <tr><th>University ID</th><th>Student Name</th><th>Exam Name</th><th>Score</th><th>Violations</th><th>Submission Time</th></tr>
+        </table>
+    </div>
+
+</div>
+
+<script>
+    async function loadExams() { const res = await fetch('/api/admin/exams'); const exams = await res.json(); const sel = document.getElementById('examSelector'); sel.innerHTML = ''; exams.forEach(e => { sel.innerHTML += `<option value="${e.id}">${e.title} (${e.is_active ? 'ACTIVE' : 'Closed'})</option>`; }); }
+    async function createExam() { await fetch('/api/admin/exams', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ title: document.getElementById('exTitle').value, duration_minutes: document.getElementById('exMins').value, policy_id: 1 }) }); loadExams(); }
+    async function toggleExam() { await fetch('/api/admin/toggle-exam', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({examId: document.getElementById('examSelector').value}) }); alert("Exam Activated!"); loadExams(); }
+    async function stopAllExams() { await fetch('/api/admin/toggle-exam', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({examId: null}) }); alert("All Exams Stopped."); loadExams(); }
+    async function addStudent() { await fetch('/api/admin/students', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id: document.getElementById('stuId').value, name: document.getElementById('stuName').value }) }); alert("Student added."); }
+    async function addQuestion() {
+        let imageUrl = null; const fileInput = document.getElementById('qImageFile');
+        if (fileInput.files[0]) { const formData = new FormData(); formData.append('image', fileInput.files[0]); const uploadRes = await fetch('/api/admin/upload', { method: 'POST', body: formData }); imageUrl = (await uploadRes.json()).imageUrl; }
+        const qType = document.getElementById('qType').value;
+        const payload = { exam_id: document.getElementById('examSelector').value, question_text: document.getElementById('qText').value, points: document.getElementById('qPts').value, q_type: qType, image_url: imageUrl, option_a: document.getElementById('optA').value, option_b: document.getElementById('optB').value, option_c: document.getElementById('optC').value, option_d: document.getElementById('optD').value, correct_answer: qType === 'mcq' ? document.getElementById('mcqAns').value : document.getElementById('fillAns').value };
+        await fetch('/api/admin/questions', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) }); alert("Question Added!");
+    }
+    let resultsData = [];
+    async function loadResults() {
+        const res = await fetch('/api/admin/results'); resultsData = await res.json(); const table = document.getElementById('resultsTable'); table.innerHTML = `<tr><th>University ID</th><th>Student Name</th><th>Exam Name</th><th>Score</th><th>Violations</th><th>Submission Time</th></tr>`;
+        resultsData.forEach(r => {
+            const vBadge = r.violations > 0 ? `<span class="badge badge-red">${r.violations} Logs</span>` : `<span class="badge badge-green">Clean</span>`;
+            table.innerHTML += `<tr><td>${r.university_id}</td><td><strong>${r.name}</strong></td><td>${r.title}</td><td><strong>${r.score} / ${r.max_score}</strong></td><td>${vBadge}</td><td>${new Date(r.timestamp).toLocaleString()}</td></tr>`;
+        });
+    }
+    function exportCsv() { let csv = "ID,Name,Exam,Score,Max_Score,Violations,Time\n"; resultsData.forEach(r => csv += `${r.university_id},${r.name},${r.title},${r.score},${r.max_score},${r.violations},${r.timestamp}\n`); const link = document.createElement("a"); link.setAttribute("href", encodeURI("data:text/csv;charset=utf-8," + csv)); link.setAttribute("download", "Exam_Results.csv"); document.body.appendChild(link); link.click(); }
+    
+    // CSV Import Logic from previous step
+    function downloadCsvTemplate() { const csvContent = "question_text,q_type,option_a,option_b,option_c,option_d,correct_answer,points\nWhat does a median filter remove?,mcq,Salt and Pepper noise,Gaussian noise,Color banding,Shadows,option_a,1\nType the missing word: A ___ filter detects edges.,fill,,,,,,Sobel,2"; const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csvContent); link.download = "Exam_Questions_Template.csv"; document.body.appendChild(link); link.click(); document.body.removeChild(link); }
+    async function uploadCsv() { const fileInput = document.getElementById('csvFileInput'); const examId = document.getElementById('examSelector').value; if (!fileInput.files[0]) return alert("Please select a CSV file first."); if (!examId) return alert("Please create/select an exam first."); const formData = new FormData(); formData.append('csvfile', fileInput.files[0]); formData.append('exam_id', examId); const res = await fetch('/api/admin/import-csv', { method: 'POST', body: formData }); const result = await res.json(); if (result.success) { alert("CSV Imported Successfully!"); fileInput.value = ""; } else { alert("Error: " + result.error); } }
+
+    loadExams(); loadResults();
+</script>
+</body>
+</html>
