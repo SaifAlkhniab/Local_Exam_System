@@ -431,14 +431,17 @@
             finishScreen.innerHTML = '<div class="card"><h2>Submitting Exam... Securely saving your answers.</h2></div>';
 
             try {
-                // Send the answers to the server
+                // Send the answers AND the list of questions shown to the student
                 const res = await fetch(`/api/student/exam/${currentExamId}/submit`, {
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${studentToken}`
                     },
-                    body: JSON.stringify({ answers: studentAnswers })
+                    body: JSON.stringify({ 
+                        answers: studentAnswers,
+                        servedQuestionIds: realQuestions.map(q => q.id) // This is the magic line!
+                    })
                 });
 
                 const data = await res.json();

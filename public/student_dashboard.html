@@ -99,20 +99,22 @@
         <p id="loginError" style="color: red; display: none; margin-top: 15px; font-size: 14px;"></p>
     </div>
 
-    <div id="dashboardScreen">
+    <div id="dashboardScreen" style="display: none; width: 100%; max-width: 1000px; margin: 20px auto;">
+        
         <div class="header">
-            <h2 style="margin:0;">SLEP Portal</h2>
-            <div style="display: flex; align-items: center; gap: 20px;">
-                <span id="studentNameDisplay">Welcome, Student</span>
-                <button class="btn-logout" onclick="logout()">Logout</button>
-            </div>
+            <h2>Welcome, <span id="studentName"></span>!</h2>
+            <button class="btn-logout" onclick="logout()">Logout</button>
         </div>
 
-        <div class="main-content">
-            <h2>Available Exams</h2>
-            <div class="exam-grid" id="examGrid">
-                </div>
+        <div style="background: white; padding: 15px; margin: 20px 0; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 10px;">
+            <h4 style="margin: 0; color: var(--primary);">Change Password:</h4>
+            <input type="password" id="newPassword" placeholder="Enter new password" style="padding: 8px; border: 1px solid #ccc; border-radius: 5px; flex-grow: 1; max-width: 250px;">
+            <button onclick="changePassword()" style="padding: 8px 15px; background: var(--accent); color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">Update</button>
         </div>
+
+        <div class="container" id="examGrid">
+            </div>
+
     </div>
 
     <script>
@@ -153,7 +155,7 @@
         function showDashboard() {
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('dashboardScreen').style.display = 'flex';
-            document.getElementById('studentNameDisplay').innerText = `Welcome, ${localStorage.getItem('studentName')}`;
+            document.getElementById('studentName').innerText = localStorage.getItem('studentName'); // CORRECT ID
             loadExams();
         }
 
@@ -161,6 +163,40 @@
             localStorage.removeItem('studentToken');
             localStorage.removeItem('studentName');
             window.location.reload();
+        }
+
+        async function changePassword() {
+            const newPassword = document.getElementById('newPassword').value;
+            
+            if (!newPassword || newPassword.length < 4) {
+                return alert("Please enter a new password (must be at least 4 characters).");
+            }
+            if (!confirm("Are you sure you want to change your password?")) {
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/student/change-password', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('studentToken')}`
+                    },
+                    body: JSON.stringify({ newPassword: newPassword })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    alert("Success! Your password has been changed.");
+                    document.getElementById('newPassword').value = ''; // Clear the input box
+                } else {
+                    alert("Error: " + data.error);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Failed to connect to the server.");
+            }
         }
 
         async function loadExams() {

@@ -10,6 +10,7 @@ const fs = require('fs');
 const csv = require('csv-parser');
 const db = require('./db');
 
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -201,6 +202,24 @@ const studentAuth = (req, res, next) => {
 // ==========================================
 // PROFESSOR ROUTES (Groups & Students)
 // ==========================================
+
+// Professor: Change Own Password
+app.put('/api/prof/change-password', professorAuth, (req, res) => {
+    const profId = req.user.id; // Extracted from the secure token
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 4) {
+        return res.status(400).json({ success: false, error: "Password must be at least 4 characters long." });
+    }
+
+    db.run(`UPDATE Professors SET password = ? WHERE id = ?`, [newPassword, profId], function(err) {
+        if (err) {
+            console.error("Password update error:", err.message);
+            return res.status(500).json({ success: false, error: "Database error while updating password." });
+        }
+        res.json({ success: true, message: "Password updated successfully!" });
+    });
+});
 
 // Get Results for a specific Exam
 app.get('/api/prof/exams/:examId/results', professorAuth, (req, res) => {
@@ -511,37 +530,10 @@ app.delete('/api/prof/questions/:id', professorAuth, (req, res) => {
     });
 });
 
-// ZIP: Export Exam
-app.get('/api/prof/exams/:id/export-zip', professorAuth, (req, res) => {
-    db.all(`SELECT * FROM Questions WHERE exam_id = ?`, [req.params.id], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        const zip = new AdmZip();
-        // Updated to match your database structure (option_a, option_b, etc.)
-        let csvContent = "\uFEFFq_type,question_text,option_a,option_b,option_c,option_d,correct_answer,points,image_filename\n";
-        
-        rows.forEach(q => {
-            const escapeCSV = (str) => `"${String(str || '').replace(/"/g, '""')}"`;
-            const imgName = q.image_url ? q.image_url.split('/').pop() : '';
-            
-            csvContent += `${q.q_type || 'mcq'},${escapeCSV(q.question_text)},${escapeCSV(q.option_a)},${escapeCSV(q.option_b)},${escapeCSV(q.option_c)},${escapeCSV(q.option_d)},${escapeCSV(q.correct_answer)},${q.points},${imgName}\n`;
-            
-            if (q.image_url) {
-                const imgPath = path.join(__dirname, q.image_url);
-                if (fs.existsSync(imgPath)) zip.addFile(`images/${imgName}`, fs.readFileSync(imgPath));
-            }
-        });
-        
-        zip.addFile("questions.csv", Buffer.from(csvContent, "utf8"));
-        res.set('Content-Type', 'application/zip');
-        res.set('Content-Disposition', `attachment; filename=Exam_${req.params.id}_Export.zip`);
-        res.send(zip.toBuffer());
-    });
-});
 
-// 7. Download ZIP Template (Upgraded with 4 examples)
+// 7. Download ZIP Template
 app.get('/api/prof/template-zip', professorAuth, (req, res) => {
     const zip = new AdmZip();
-    // Proper CSV structure with escaped quotes for the Multiple Answer example
     const csvContent = 
 `\uFEFFq_type,question_text,options_separated_by_pipe,correct_answer,points,image_filename
 mcq,What is the capital of France?,Paris|London|Berlin|Madrid,Paris,1,
@@ -550,7 +542,7 @@ fib,The matrix determinant of [blank] is [blank].,,"42, Matrix",2,
 ma,Which of these are primary colors?,Red|Green|Blue|Yellow,"[""Red"",""Blue""]",2,sky.jpg`;
 
     zip.addFile("questions.csv", Buffer.from(csvContent, "utf8"));
-    zip.addFile("images/sky.jpg", Buffer.from("fake image content")); // Dummy file to generate the folder
+    zip.addFile("images/sky.jpg", Buffer.from("fake image content")); // Folder placeholder
     
     res.set('Content-Type', 'application/zip');
     res.set('Content-Disposition', 'attachment; filename=Exam_Import_Template.zip');
@@ -647,10 +639,24 @@ app.post('/api/prof/exams/:examId/import-zip', professorAuth, upload.single('zip
 
                 results.forEach(row => {
                     const imgUrl = row.image_filename ? `/images/${row.image_filename}` : null;
-                    const options = row.options_separated_by_pipe ? JSON.stringify(row.options_separated_by_pipe.split('|')) : "[]";
+                    
+                    let finalOptions = "[]";
+                    // 1. Check for the universal column
+                    if (row.options_separated_by_pipe) {
+                        finalOptions = JSON.stringify(row.options_separated_by_pipe.split('|').map(s => s.trim()));
+                    } 
+                    // 2. Fallback for old templates (option_a, b, etc.)
+                    else if (row.option_a || row.option_b) {
+                        const legacyArr = [row.option_a, row.option_b, row.option_c, row.option_d].filter(o => o && o.trim() !== "");
+                        finalOptions = JSON.stringify(legacyArr);
+                    }
+                    // 3. Last fallback for direct exports
+                    else if (row.options) {
+                        finalOptions = row.options;
+                    }
                     
                     db.run(`INSERT INTO Questions (exam_id, q_type, question_text, image_url, options, correct_answer, points) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
-                    [req.params.examId, row.q_type, row.question_text, imgUrl, options, row.correct_answer, row.points || 1], () => {
+                    [req.params.examId, row.q_type, row.question_text, imgUrl, finalOptions, row.correct_answer, row.points || 1], () => {
                         completed++;
                         if(completed === results.length) {
                             fs.unlinkSync(req.file.path);
@@ -671,42 +677,67 @@ app.post('/api/prof/exams/:examId/import-zip', professorAuth, upload.single('zip
 // 1. Student Login
 app.post('/api/student/login', (req, res) => {
     const { university_id, password } = req.body;
-    
-    db.get(`SELECT id, name, is_active FROM Students WHERE university_id = ? AND password = ?`, 
-    [university_id, password], (err, student) => {
-        if (err) return res.status(500).json({ success: false, error: "Database error" });
-        if (!student) return res.status(401).json({ success: false, error: "Invalid ID or Password" });
-        if (student.is_active === 0) return res.status(403).json({ success: false, error: "Account is deactivated" });
-
-        // Generate a secure token just for this student
-        const token = jwt.sign({ id: student.id, role: 'student' }, JWT_SECRET, { expiresIn: '4h' });
+    db.get(`SELECT * FROM Students WHERE university_id = ? AND password = ?`, [university_id, password], (err, student) => {
+        if (err || !student) return res.status(401).json({ success: false, error: "Invalid credentials" });
+        
+        // FIX: We MUST include the group_id in the token so they can see their assigned exams!
+        const token = jwt.sign({ 
+            id: student.id, 
+            university_id: student.university_id,
+            name: student.name,
+            group_id: student.group_id, 
+            role: 'student' 
+        }, JWT_SECRET, { expiresIn: '4h' });
+        
         res.json({ success: true, token, name: student.name });
+    });
+});
+
+// Change Student Password
+app.put('/api/student/change-password', studentAuth, (req, res) => {
+    const studentId = req.studentId; // FIXED: Using correct token variable
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 4) {
+        return res.status(400).json({ success: false, error: "Password must be at least 4 characters long." });
+    }
+
+    db.run(`UPDATE Students SET password = ? WHERE id = ?`, [newPassword, studentId], function(err) {
+        if (err) return res.status(500).json({ success: false, error: "Database error while updating password." });
+        res.json({ success: true, message: "Password updated successfully!" });
     });
 });
 
 // 2. Get Active Exams for this Student
 app.get('/api/student/exams', studentAuth, (req, res) => {
-    // This complex query ensures a student ONLY sees active exams assigned to their specific group
+    const studentId = req.studentId; 
+
+    // This updated query checks BOTH the Student_Groups table AND 
+    // any exams that might be set to 'all' or directly linked.
     const sql = `
-        SELECT e.id, e.title, e.duration_minutes, p.name as professor_name 
-        FROM Exams e 
-        JOIN Student_Groups sg ON e.group_id = sg.group_id 
-        JOIN Professors p ON e.professor_id = p.id 
-        WHERE sg.student_id = ? AND e.is_active = 1 AND e.is_closed = 0
+        SELECT DISTINCT e.id, e.title, e.duration_minutes, p.name as professor_name 
+        FROM Exams e
+        JOIN Professors p ON e.professor_id = p.id
+        LEFT JOIN Student_Groups sg ON e.group_id = sg.group_id
+        WHERE (sg.student_id = ? OR e.group_id IS NULL OR e.group_id = 0)
+        AND e.is_active = 1
+        AND e.id NOT IN (SELECT exam_id FROM Results WHERE student_id = ?)
     `;
     
-    db.all(sql, [req.studentId], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows || []);
+    db.all(sql, [studentId, studentId], (err, exams) => {
+        if (err) {
+            console.error("Database Error:", err.message);
+            return res.status(500).json({ error: "Failed to fetch exams" });
+        }
+        res.json(exams || []);
     });
 });
 
-// 3. Get Exam Details and Questions (SECURE: No answers included!)
+// 3. Get Exam Details and Questions (With Shuffling and Selection)
 app.get('/api/student/exam/:examId', studentAuth, (req, res) => {
     const examId = req.params.examId;
     const studentId = req.studentId;
 
-    // First, verify the student is actually allowed to take this specific exam
     const verifySql = `
         SELECT e.* FROM Exams e
         JOIN Student_Groups sg ON e.group_id = sg.group_id
@@ -715,79 +746,110 @@ app.get('/api/student/exam/:examId', studentAuth, (req, res) => {
 
     db.get(verifySql, [examId, studentId], (err, exam) => {
         if (err) return res.status(500).json({ success: false, error: "Database error" });
-        if (!exam) return res.status(403).json({ success: false, error: "Exam not available or unauthorized." });
+        if (!exam) return res.status(403).json({ success: false, error: "Exam not available." });
 
-        // Fetch questions. Notice we DO NOT select the 'correct_answer' column!
         const qSql = `SELECT id, q_type, question_text, image_url, options, points FROM Questions WHERE exam_id = ?`;
         
         db.all(qSql, [examId], (err, questions) => {
             if (err) return res.status(500).json({ success: false, error: "Error fetching questions" });
             
-            // Safely parse the options string back into an array for the frontend
+            // 1. Shuffle Questions if enabled
+            if (exam.shuffle_questions === 1) {
+                questions.sort(() => Math.random() - 0.5);
+            }
+
+            // 2. Limit the number of questions to display
+            if (exam.q_display_count && exam.q_display_count > 0) {
+                questions = questions.slice(0, exam.q_display_count);
+            }
+
+            // 3. Parse options and Shuffle them if enabled
             questions.forEach(q => {
                 try { 
                     q.options = q.options ? JSON.parse(q.options) : []; 
-                } catch (e) { 
-                    q.options = []; 
-                }
+                    if (exam.shuffle_options === 1 && q.q_type === 'mcq') {
+                        q.options.sort(() => Math.random() - 0.5);
+                    }
+                } catch (e) { q.options = []; }
             });
 
             res.json({
                 success: true,
                 exam: { title: exam.title, duration_minutes: exam.duration_minutes },
-                questions: questions
+                questions: questions // Only the selected subset is sent to the student!
             });
         });
     });
 });
 
-// 4. Submit Exam and Auto-Grade
+// 4. Submit Exam and Auto-Grade (Corrected for Random Subsets)
 app.post('/api/student/exam/:examId/submit', studentAuth, (req, res) => {
     const examId = req.params.examId;
     const studentId = req.studentId;
     const studentAnswers = req.body.answers || {};
+    
+    // NEW: The frontend should send the list of IDs the student actually saw
+    // If your frontend doesn't send this yet, we will fallback to the IDs in studentAnswers
+    const servedQuestionIds = req.body.servedQuestionIds || Object.keys(studentAnswers);
 
-    // 1. Check if the student already submitted this exam (prevent double-submitting)
     db.get(`SELECT id FROM Results WHERE exam_id = ? AND student_id = ?`, [examId, studentId], (err, existingResult) => {
-        if (err) return res.status(500).json({ success: false, error: "Database error" });
-        if (existingResult) return res.status(400).json({ success: false, error: "You have already submitted this exam." });
+        if (existingResult) return res.status(400).json({ success: false, error: "Already submitted." });
 
-        // 2. Fetch the correct answers from the database
-        db.all(`SELECT id, q_type, correct_answer, points FROM Questions WHERE exam_id = ?`, [examId], (err, questions) => {
-            if (err) return res.status(500).json({ success: false, error: "Error grading exam" });
+        // Fetch ONLY the questions that were actually served to this student
+        const placeholders = servedQuestionIds.map(() => '?').join(',');
+        const sql = `SELECT id, q_type, correct_answer, points FROM Questions WHERE id IN (${placeholders}) AND exam_id = ?`;
+        
+        db.all(sql, [...servedQuestionIds, examId], (err, questions) => {
+            if (err) return res.status(500).json({ error: "Grading error" });
 
             let totalScore = 0;
             let maxScore = 0;
 
-            // 3. Auto-Grade each question
+            // --- IMPROVED GRADING LOGIC ---
             questions.forEach(q => {
                 maxScore += q.points;
                 const studentAns = studentAnswers[q.id];
-
-                if (!studentAns) return; // Student skipped the question, 0 points
+                if (!studentAns) return;
 
                 let isCorrect = false;
 
                 if (q.q_type === 'fib') {
-                    // Fill-in-the-blank: Case-insensitive match, ignore extra spaces
-                    if (String(q.correct_answer).toLowerCase().trim() === String(studentAns).toLowerCase().trim()) isCorrect = true;
-                } else if (q.q_type === 'ma') {
-                    // Multiple Answer: Compare arrays (this requires parsing JSON or pipe strings depending on how you saved it)
-                    // For safety, we compare them as lowercase strings
-                    if (String(q.correct_answer).toLowerCase().trim() === String(studentAns).toLowerCase().trim()) isCorrect = true;
-                } else {
-                    // MCQ and True/False: Direct string match
-                    if (String(q.correct_answer).trim() === String(studentAns).trim()) isCorrect = true;
+                    // 1. Handle FIB: Allow match against any comma-separated value
+                    const studentClean = String(studentAns).toLowerCase().trim();
+                    const acceptableAnswers = String(q.correct_answer).split(',').map(a => a.toLowerCase().trim());
+                    
+                    if (acceptableAnswers.includes(studentClean)) {
+                        isCorrect = true;
+                    }
+                } 
+                else if (q.q_type === 'ma') {
+                    // 2. Handle Multiple Answer: Ensure arrays are sorted for comparison
+                    // Student answer is already an array from student_exam.html
+                    // Correct answer might be a JSON string like '["Opt A", "Opt B"]'
+                    try {
+                        let correctArr = JSON.parse(q.correct_answer);
+                        if (Array.isArray(studentAns) && Array.isArray(correctArr)) {
+                            const sSorted = studentAns.map(s => String(s).toLowerCase().trim()).sort().join('|');
+                            const cSorted = correctArr.map(c => String(c).toLowerCase().trim()).sort().join('|');
+                            if (sSorted === cSorted) isCorrect = true;
+                        }
+                    } catch (e) {
+                        // Fallback for non-JSON strings
+                        if (String(q.correct_answer).toLowerCase().trim() === String(studentAns).toLowerCase().trim()) isCorrect = true;
+                    }
+                } 
+                else {
+                    // 3. Handle MCQ and True/False: Standard direct match
+                    if (String(q.correct_answer).toLowerCase().trim() === String(studentAns).toLowerCase().trim()) {
+                        isCorrect = true;
+                    }
                 }
 
                 if (isCorrect) totalScore += q.points;
             });
 
-            // 4. Save to the Results table
             db.run(`INSERT INTO Results (exam_id, student_id, score, max_score, violations) VALUES (?, ?, ?, ?, ?)`,
-            [examId, studentId, totalScore, maxScore, 0], function(err) {
-                if (err) return res.status(500).json({ success: false, error: "Failed to save results" });
-                
+            [examId, studentId, totalScore, maxScore, req.body.violations || 0], function(err) {
                 res.json({ success: true, score: totalScore, maxScore: maxScore });
             });
         });

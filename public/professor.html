@@ -58,7 +58,7 @@
         <h2>Professor Portal</h2>
         <button class="nav-btn active" onclick="switchTab('groupsTab', this)">👥 Groups & Students</button>
         <button class="nav-btn" onclick="switchTab('examsTab', this)">📝 Exam Builder</button>
-        <button class="nav-btn" onclick="alert('Results coming soon!')">📊 Results</button>
+        <button class="nav-btn" onclick="switchTab('settingsTab', this)">⚙️ Settings</button>
         <button class="nav-btn logout-btn" onclick="logout()">🚪 Logout</button>
     </div>
 
@@ -117,6 +117,7 @@
                     <select id="examGroupSelect"><option value="">Loading Groups...</option></select>
                     <input type="text" id="examTitle" placeholder="Exam Title (e.g. Midterm 1)">
                     <input type="number" id="examDuration" placeholder="Duration (Minutes)">
+                    <input type="number" id="qDisplayCount" placeholder="Show how many questions? (0 = All)" title="How many questions should the student see from the total bank?">
                     <div style="display:flex; gap: 15px; margin-bottom: 15px; font-size: 14px;">
                         <label><input type="checkbox" id="shuffleQs" checked> Shuffle Questions</label>
                         <label><input type="checkbox" id="shuffleOpts" checked> Shuffle Options</label>
@@ -172,6 +173,20 @@
                 </div>
             </div>
 
+            <div id="settingsTab" class="tab-content">
+                <div class="card">
+                    <h3>Account Settings</h3>
+                    <p>Manage your professor account credentials.</p>
+                    <hr>
+                    <div style="max-width: 400px; margin-top: 20px;">
+                        <div class="form-group">
+                            <label>New Password</label>
+                            <input type="password" id="newProfPassword" placeholder="Minimum 4 characters" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
+                        </div>
+                        <button onclick="changeProfPassword()" style="width: 100%; padding: 12px;">Update Password</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -370,8 +385,10 @@
             title: document.getElementById('examTitle').value, 
             duration_minutes: document.getElementById('examDuration').value,
             shuffle_questions: document.getElementById('shuffleQs').checked,
-            shuffle_options: document.getElementById('shuffleOpts').checked
+            shuffle_options: document.getElementById('shuffleOpts').checked,
+            q_display_count: document.getElementById('qDisplayCount').value || 0
         };
+        
         if(!payload.group_id || !payload.title || !payload.duration_minutes) return alert("Fill all fields");
         await apiCall('/api/prof/exams', { method: 'POST', body: JSON.stringify(payload) });
         loadExamsAndGroups();
@@ -640,6 +657,37 @@
         document.body.appendChild(a);
         a.click();
         a.remove();
+    }
+
+    async function changeProfPassword() {
+        const newPassword = document.getElementById('newProfPassword').value;
+        
+        if (!newPassword || newPassword.length < 4) {
+            return alert("Password must be at least 4 characters long.");
+        }
+
+        if (!confirm("Are you sure you want to change your password?")) return;
+
+        try {
+            const res = await apiCall('/api/prof/change-password', {
+                method: 'PUT',
+                body: JSON.stringify({ newPassword })
+            });
+
+            if (res.success) {
+                alert("Success: Your password has been updated.");
+                document.getElementById('newProfPassword').value = ''; 
+                
+                // FIXED: We find the Exams button and switch back to it correctly
+                const examsBtn = document.querySelector('button[onclick*="examsTab"]');
+                switchTab('examsTab', examsBtn); 
+            } else {
+                alert("Error: " + res.error);
+            }
+        } catch (err) {
+            console.error("Error:", err);
+            alert("Failed to connect to the server.");
+        }
     }
 
     function previewExam() { alert("Preview Student Interface Overlay Coming Next!"); 
