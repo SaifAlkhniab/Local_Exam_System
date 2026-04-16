@@ -25,6 +25,27 @@ if [ ! -f ".env" ]; then
     cp .env.example .env
 fi
 
-# Start Server
+# Start Server in background
 echo "Launching Server..."
-node server.js
+node server.js &
+SERVER_PID=$!
+
+# Wait 2 seconds for the server to initialize
+sleep 2
+
+# Open the Class Lobby in the default browser
+echo "Opening Class Lobby in browser..."
+if command -v xdg-open &> /dev/null; then
+    xdg-open "http://localhost/lobby.html"
+elif command -v open &> /dev/null; then
+    open "http://localhost/lobby.html"
+fi
+
+echo ""
+echo "========================================="
+echo " SLEP v3.0 is RUNNING!"
+echo " Press Ctrl+C to stop the server."
+echo "========================================="
+
+# Wait for server process to exit
+wait $SERVER_PID

@@ -1,4 +1,6 @@
 require('dotenv').config();
+const os = require('os');
+const QRCode = require('qrcode');
 const AdmZip = require('adm-zip');
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_key';
@@ -14,6 +16,8 @@ const db = require('./db');
 const app = express();
 app.use(cors());
 app.use(express.json());
+// Redirect bare root to the student login portal
+app.get('/', (req, res) => res.redirect('/student-login.html'));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/images', express.static(path.join(__dirname, 'images')));
 
@@ -42,6 +46,7 @@ const superAdminAuth = (req, res, next) => {
 
 // In-memory tracker for failed login attempts
 const failedLogins = new Map();
+const autosaveStore = new Map(); // In-memory backup of in-progress student answers
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_TIME = 5 * 60 * 1000; // 5 minutes in milliseconds
 
@@ -223,18 +228,37 @@ app.put('/api/prof/change-password', professorAuth, (req, res) => {
 
 // Get Results for a specific Exam
 app.get('/api/prof/exams/:examId/results', professorAuth, (req, res) => {
-    // This query joins the Results table with the Students table to get names and IDs
-    const sql = `
-        SELECT r.score, r.max_score, r.timestamp, s.name as student_name, s.university_id 
-        FROM Results r
-        JOIN Students s ON r.student_id = s.id
-        WHERE r.exam_id = ?
-        ORDER BY r.score DESC
-    `;
-    
-    db.all(sql, [req.params.examId], (err, rows) => {
-        if (err) return res.status(500).json({ error: "Failed to fetch results" });
-        res.json(rows || []);
+    const examId = req.params.examId;
+
+    // Fetch exam title — no professor_id guard so the results are never silently hidden
+    db.get(`SELECT title FROM Exams WHERE id = ?`, [examId], (err, exam) => {
+        if (err) {
+            console.error(`[RESULTS] Exam title query error for exam ${examId}:`, err.message);
+            return res.status(500).json({ error: "Database error" });
+        }
+
+        const examTitle = exam ? exam.title : ('Exam #' + examId);
+
+        // LEFT JOIN: keep result rows even if the student account was deleted
+        // Status filter: only return real submissions, not in-progress placeholders
+        const sql = `
+            SELECT r.score, r.max_score, r.timestamp, r.violations, r.status,
+                   COALESCE(s.name, '[Deleted Student]') AS student_name,
+                   COALESCE(s.university_id, 'N/A') AS university_id
+            FROM Results r
+            LEFT JOIN Students s ON r.student_id = s.id
+            WHERE r.exam_id = ?
+              AND r.status IN ('submitted', 'completed')
+            ORDER BY r.score DESC
+        `;
+        db.all(sql, [examId], (err, rows) => {
+            if (err) {
+                console.error(`[RESULTS] Results query error for exam ${examId}:`, err.message);
+                return res.status(500).json({ error: "Failed to fetch results" });
+            }
+            console.log(`[RESULTS] Exam ${examId} ("${examTitle}"): returning ${rows.length} submission(s) to professor ${req.user.id}`);
+            res.json({ exam_title: examTitle, results: rows || [] });
+        });
     });
 });
 
@@ -370,9 +394,9 @@ app.get('/api/prof/exams', professorAuth, (req, res) => {
 
 // 2. Create Exam
 app.post('/api/prof/exams', professorAuth, (req, res) => {
-    const { title, group_id, duration_minutes, q_display_count, shuffle_questions, shuffle_options } = req.body;
-    db.run(`INSERT INTO Exams (professor_id, group_id, title, duration_minutes, q_display_count, shuffle_questions, shuffle_options) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
-    [req.user.id, group_id, title, duration_minutes, q_display_count || null, shuffle_questions ? 1 : 0, shuffle_options ? 1 : 0], function(err) {
+    const { title, group_id, duration_minutes, q_display_count, shuffle_questions, shuffle_options, prevent_backtracking } = req.body;
+    db.run(`INSERT INTO Exams (professor_id, group_id, title, duration_minutes, q_display_count, shuffle_questions, shuffle_options, prevent_backtracking) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [req.user.id, group_id, title, duration_minutes, q_display_count || null, shuffle_questions ? 1 : 0, shuffle_options ? 1 : 0, prevent_backtracking ? 1 : 0], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true, id: this.lastID });
     });
@@ -712,19 +736,19 @@ app.put('/api/student/change-password', studentAuth, (req, res) => {
 app.get('/api/student/exams', studentAuth, (req, res) => {
     const studentId = req.studentId; 
 
-    // This updated query checks BOTH the Student_Groups table AND 
-    // any exams that might be set to 'all' or directly linked.
+    // Returns active exams not yet submitted; in-progress exams still appear for resumption.
     const sql = `
-        SELECT DISTINCT e.id, e.title, e.duration_minutes, p.name as professor_name 
+        SELECT DISTINCT e.id, e.title, e.duration_minutes, p.name as professor_name,
+            (SELECT status FROM Results WHERE exam_id = e.id AND student_id = ? LIMIT 1) as my_status
         FROM Exams e
         JOIN Professors p ON e.professor_id = p.id
         LEFT JOIN Student_Groups sg ON e.group_id = sg.group_id
         WHERE (sg.student_id = ? OR e.group_id IS NULL OR e.group_id = 0)
         AND e.is_active = 1
-        AND e.id NOT IN (SELECT exam_id FROM Results WHERE student_id = ?)
+        AND e.id NOT IN (SELECT exam_id FROM Results WHERE student_id = ? AND status IN ('submitted', 'completed'))
     `;
-    
-    db.all(sql, [studentId, studentId], (err, exams) => {
+
+    db.all(sql, [studentId, studentId, studentId], (err, exams) => {
         if (err) {
             console.error("Database Error:", err.message);
             return res.status(500).json({ error: "Failed to fetch exams" });
@@ -741,48 +765,132 @@ app.get('/api/student/exam/:examId', studentAuth, (req, res) => {
     const verifySql = `
         SELECT e.* FROM Exams e
         JOIN Student_Groups sg ON e.group_id = sg.group_id
-        WHERE e.id = ? AND sg.student_id = ? AND e.is_active = 1 AND e.is_closed = 0
+        WHERE e.id = ? AND sg.student_id = ? AND e.is_active = 1
     `;
 
     db.get(verifySql, [examId, studentId], (err, exam) => {
         if (err) return res.status(500).json({ success: false, error: "Database error" });
         if (!exam) return res.status(403).json({ success: false, error: "Exam not available." });
 
-        const qSql = `SELECT id, q_type, question_text, image_url, options, points FROM Questions WHERE exam_id = ?`;
-        
-        db.all(qSql, [examId], (err, questions) => {
-            if (err) return res.status(500).json({ success: false, error: "Error fetching questions" });
-            
-            // 1. Shuffle Questions if enabled
-            if (exam.shuffle_questions === 1) {
-                questions.sort(() => Math.random() - 0.5);
+        // --- STRICT SESSION LOCK (runs before questions are served) ---
+        db.get(
+            `SELECT id, status, started_at FROM Results WHERE exam_id = ? AND student_id = ?`,
+            [examId, studentId],
+            (sessErr, session) => {
+                if (sessErr) {
+                    console.error('[GET EXAM] Session lookup error:', sessErr.message);
+                    return res.status(500).json({ success: false, error: 'Database error checking session.' });
+                }
+
+                // Condition B: Already finalised — deny access
+                if (session && (session.status === 'submitted' || session.status === 'completed')) {
+                    return res.status(403).json({ success: false, error: 'You have already submitted this exam or were locked out for leaving the page.' });
+                }
+
+                const serveExam = (startTime, isResuming) => {
+                    const qSql = `SELECT id, q_type, question_text, image_url, options, points FROM Questions WHERE exam_id = ?`;
+                    db.all(qSql, [examId], (err, questions) => {
+                        if (err) return res.status(500).json({ success: false, error: "Error fetching questions" });
+
+                        // Shuffle questions if enabled
+                        if (exam.shuffle_questions === 1) questions.sort(() => Math.random() - 0.5);
+
+                        // Limit to display count
+                        if (exam.q_display_count && exam.q_display_count > 0) {
+                            questions = questions.slice(0, exam.q_display_count);
+                        }
+
+                        // Parse + shuffle options
+                        questions.forEach(q => {
+                            try {
+                                q.options = q.options ? JSON.parse(q.options) : [];
+                                if (exam.shuffle_options === 1 && q.q_type === 'mcq') {
+                                    q.options.sort(() => Math.random() - 0.5);
+                                }
+                            } catch (e) { q.options = []; }
+                        });
+
+                        res.json({
+                            success: true,
+                            exam: {
+                                title: exam.title,
+                                duration_minutes: exam.duration_minutes,
+                                prevent_backtracking: exam.prevent_backtracking || 0
+                            },
+                            questions,
+                            start_time: startTime,
+                            is_resuming: isResuming
+                        });
+                    });
+                };
+
+                if (session && session.status === 'in_progress') {
+                    // Condition C: Resume — return original start_time, no new record
+                    console.log(`[GET EXAM] Resuming session for student ${studentId}, exam ${examId}`);
+                    serveExam(session.started_at, true);
+                } else {
+                    // Condition A: First visit — create in_progress record
+                    db.run(
+                        `INSERT INTO Results (exam_id, student_id, score, max_score, status, started_at) VALUES (?, ?, 0, 0, 'in_progress', datetime('now'))`,
+                        [examId, studentId],
+                        function(insertErr) {
+                            if (insertErr) {
+                                console.error('[GET EXAM] INSERT session error:', insertErr.message);
+                                return res.status(500).json({ success: false, error: 'Failed to register session.' });
+                            }
+                            // Re-read the stored timestamp so the client gets exactly what SQLite stored
+                            db.get(
+                                `SELECT started_at FROM Results WHERE id = ?`,
+                                [this.lastID],
+                                (readErr, row) => {
+                                    if (readErr || !row) {
+                                        console.error('[GET EXAM] Re-read started_at error:', readErr && readErr.message);
+                                        return res.status(500).json({ success: false, error: 'Failed to read session timestamp.' });
+                                    }
+                                    console.log(`[GET EXAM] New session created for student ${studentId}, exam ${examId}, started_at: ${row.started_at}`);
+                                    serveExam(row.started_at, false);
+                                }
+                            );
+                        }
+                    );
+                }
             }
-
-            // 2. Limit the number of questions to display
-            if (exam.q_display_count && exam.q_display_count > 0) {
-                questions = questions.slice(0, exam.q_display_count);
-            }
-
-            // 3. Parse options and Shuffle them if enabled
-            questions.forEach(q => {
-                try { 
-                    q.options = q.options ? JSON.parse(q.options) : []; 
-                    if (exam.shuffle_options === 1 && q.q_type === 'mcq') {
-                        q.options.sort(() => Math.random() - 0.5);
-                    }
-                } catch (e) { q.options = []; }
-            });
-
-            res.json({
-                success: true,
-                exam: { title: exam.title, duration_minutes: exam.duration_minutes },
-                questions: questions // Only the selected subset is sent to the student!
-            });
-        });
+        );
     });
 });
 
-// 4. Submit Exam and Auto-Grade (Corrected for Random Subsets)
+// 4. Start Exam — session was already created by GET; just computes remaining time
+app.post('/api/student/exam/:examId/start', studentAuth, (req, res) => {
+    const examId = req.params.examId;
+    const studentId = req.studentId;
+
+    const sql = `
+        SELECT e.duration_minutes, r.status, r.started_at
+        FROM Exams e
+        JOIN Results r ON r.exam_id = e.id AND r.student_id = ?
+        WHERE e.id = ?
+    `;
+    db.get(sql, [studentId, examId], (err, row) => {
+        if (err) {
+            console.error('[START] Query error:', err.message);
+            return res.status(500).json({ success: false, error: 'Database error.' });
+        }
+        if (!row) return res.status(404).json({ success: false, error: 'Session not found. Please reload the page.' });
+        if (row.status === 'submitted' || row.status === 'completed') return res.status(400).json({ success: false, error: 'This exam has already been submitted.' });
+
+        try {
+            const startedMs = new Date((row.started_at || '').replace(' ', 'T') + 'Z').getTime();
+            const elapsed = isNaN(startedMs) ? 0 : Math.floor((Date.now() - startedMs) / 1000);
+            const remaining = Math.max(0, row.duration_minutes * 60 - elapsed);
+            return res.json({ success: true, timeRemaining: remaining });
+        } catch (e) {
+            console.error('[START] Date parse error:', e.message);
+            return res.json({ success: true, timeRemaining: row.duration_minutes * 60 });
+        }
+    });
+});
+
+// 5. Submit Exam and Auto-Grade (Corrected for Random Subsets)
 app.post('/api/student/exam/:examId/submit', studentAuth, (req, res) => {
     const examId = req.params.examId;
     const studentId = req.studentId;
@@ -792,8 +900,8 @@ app.post('/api/student/exam/:examId/submit', studentAuth, (req, res) => {
     // If your frontend doesn't send this yet, we will fallback to the IDs in studentAnswers
     const servedQuestionIds = req.body.servedQuestionIds || Object.keys(studentAnswers);
 
-    db.get(`SELECT id FROM Results WHERE exam_id = ? AND student_id = ?`, [examId, studentId], (err, existingResult) => {
-        if (existingResult) return res.status(400).json({ success: false, error: "Already submitted." });
+    db.get(`SELECT id, status FROM Results WHERE exam_id = ? AND student_id = ?`, [examId, studentId], (err, existingResult) => {
+        if (existingResult && (existingResult.status === 'submitted' || existingResult.status === 'completed')) return res.status(400).json({ success: false, error: "Already submitted." });
 
         // Fetch ONLY the questions that were actually served to this student
         const placeholders = servedQuestionIds.map(() => '?').join(',');
@@ -848,12 +956,185 @@ app.post('/api/student/exam/:examId/submit', studentAuth, (req, res) => {
                 if (isCorrect) totalScore += q.points;
             });
 
-            db.run(`INSERT INTO Results (exam_id, student_id, score, max_score, violations) VALUES (?, ?, ?, ?, ?)`,
-            [examId, studentId, totalScore, maxScore, req.body.violations || 0], function(err) {
-                res.json({ success: true, score: totalScore, maxScore: maxScore });
-            });
+            const violations = req.body.violations || 0;
+            if (existingResult) {
+                // Update the in-progress placeholder record
+                db.run(
+                    `UPDATE Results SET score = ?, max_score = ?, violations = ?, status = 'submitted', timestamp = CURRENT_TIMESTAMP WHERE exam_id = ? AND student_id = ?`,
+                    [totalScore, maxScore, violations, examId, studentId],
+                    function(err) {
+                        if (err) return res.status(500).json({ error: "Failed to save results." });
+                        res.json({ success: true, score: totalScore, maxScore: maxScore });
+                    }
+                );
+            } else {
+                // Fallback: direct submit without prior session registration
+                db.run(
+                    `INSERT INTO Results (exam_id, student_id, score, max_score, violations, status) VALUES (?, ?, ?, ?, ?, 'submitted')`,
+                    [examId, studentId, totalScore, maxScore, violations],
+                    function(err) {
+                        if (err) return res.status(500).json({ error: "Failed to save results." });
+                        res.json({ success: true, score: totalScore, maxScore: maxScore });
+                    }
+                );
+            }
         });
     });
+});
+
+// 5a. Beacon Submit — fires when navigator.sendBeacon() triggers on page hide
+// Cannot use studentAuth (sendBeacon can't set custom headers); token arrives in body.
+app.post('/api/student/exam/beacon-submit',
+    express.text({ type: '*/*' }), // fallback: capture body if Content-Type wasn't application/json
+    (req, res) => {
+        // Parse payload: object if express.json() handled it, string if express.text() handled it
+        let payload;
+        try {
+            payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+            if (!payload || typeof payload !== 'object') throw new Error('bad payload');
+        } catch(e) {
+            return res.status(400).end();
+        }
+
+        const { token, examId, answers, servedQuestionIds, violations: viol } = payload;
+        if (!token || !examId) return res.status(400).end();
+
+        // Verify JWT from payload
+        let studentId;
+        try {
+            const decoded = jwt.verify(token, JWT_SECRET);
+            if (decoded.role !== 'student') return res.status(403).end();
+            studentId = decoded.id;
+        } catch(e) {
+            console.error('[BEACON] Invalid token:', e.message);
+            return res.status(401).end();
+        }
+
+        const studentAnswers = answers || {};
+        const questionIds = Array.isArray(servedQuestionIds) && servedQuestionIds.length
+            ? servedQuestionIds
+            : Object.keys(studentAnswers);
+        const finalViolations = viol || 0;
+
+        // Don't overwrite an already-final record
+        db.get(`SELECT id, status FROM Results WHERE exam_id = ? AND student_id = ?`,
+            [examId, studentId],
+            (err, existing) => {
+                if (err) { console.error('[BEACON] DB lookup error:', err.message); return res.status(500).end(); }
+                if (existing && (existing.status === 'submitted' || existing.status === 'completed')) {
+                    return res.status(200).end(); // already finalised — silently accept
+                }
+
+                const saveResult = (score, maxScore) => {
+                    if (existing) {
+                        db.run(
+                            `UPDATE Results SET score=?, max_score=?, violations=?, status='completed', timestamp=CURRENT_TIMESTAMP WHERE exam_id=? AND student_id=?`,
+                            [score, maxScore, finalViolations, examId, studentId],
+                            (err) => { if (err) console.error('[BEACON] UPDATE error:', err.message); }
+                        );
+                    } else {
+                        db.run(
+                            `INSERT INTO Results (exam_id, student_id, score, max_score, violations, status) VALUES (?, ?, ?, ?, ?, 'completed')`,
+                            [examId, studentId, score, maxScore, finalViolations],
+                            (err) => { if (err) console.error('[BEACON] INSERT error:', err.message); }
+                        );
+                    }
+                    console.log(`[BEACON] Forced submit — student ${studentId}, exam ${examId}, score ${score}/${maxScore}`);
+                    res.status(200).end();
+                };
+
+                if (!questionIds.length) return saveResult(0, 0);
+
+                const placeholders = questionIds.map(() => '?').join(',');
+                db.all(
+                    `SELECT id, q_type, correct_answer, points FROM Questions WHERE id IN (${placeholders}) AND exam_id = ?`,
+                    [...questionIds, examId],
+                    (err, questions) => {
+                        if (err) { console.error('[BEACON] Grade query error:', err.message); return res.status(500).end(); }
+
+                        let totalScore = 0, maxScore = 0;
+                        (questions || []).forEach(q => {
+                            maxScore += q.points;
+                            const ans = studentAnswers[q.id];
+                            if (!ans) return;
+                            let ok = false;
+                            if (q.q_type === 'fib') {
+                                const clean = String(ans).toLowerCase().trim();
+                                const acceptable = String(q.correct_answer).split(',').map(a => a.toLowerCase().trim());
+                                if (acceptable.includes(clean)) ok = true;
+                            } else if (q.q_type === 'ma') {
+                                try {
+                                    const correctArr = JSON.parse(q.correct_answer);
+                                    if (Array.isArray(ans) && Array.isArray(correctArr)) {
+                                        const ss = ans.map(s => String(s).toLowerCase().trim()).sort().join('|');
+                                        const cs = correctArr.map(c => String(c).toLowerCase().trim()).sort().join('|');
+                                        if (ss === cs) ok = true;
+                                    }
+                                } catch(e) {
+                                    if (String(q.correct_answer).toLowerCase().trim() === String(ans).toLowerCase().trim()) ok = true;
+                                }
+                            } else {
+                                if (String(q.correct_answer).toLowerCase().trim() === String(ans).toLowerCase().trim()) ok = true;
+                            }
+                            if (ok) totalScore += q.points;
+                        });
+                        saveResult(totalScore, maxScore);
+                    }
+                );
+            }
+        );
+    }
+);
+
+// 5b. Auto-Save Endpoint (backs up in-progress answers to memory)
+app.post('/api/student/autosave', studentAuth, (req, res) => {
+    const { examId, answers, timeRemaining } = req.body;
+    autosaveStore.set(req.studentId, { examId, answers, timeRemaining, savedAt: Date.now() });
+    res.json({ success: true });
+});
+
+// ==========================================
+// QR CODE LOBBY — HOST IP DETECTION
+// ==========================================
+function getLocalIP() {
+    const interfaces = os.networkInterfaces();
+    let fallbackIp = 'localhost';
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            // Only care about IPv4 and non-internal
+            if (iface.family === 'IPv4' && !iface.internal) {
+                // STRICTLY BAN VirtualBox (192.168.56.x) and APIPA (169.254.x.x)
+                if (iface.address.startsWith('192.168.56.') || iface.address.startsWith('169.254.')) {
+                    continue;
+                }
+                // If it's a Wi-Fi or Wireless adapter, return immediately
+                if (name.toLowerCase().includes('wi-fi') || name.toLowerCase().includes('wlan') || name.toLowerCase().includes('wireless')) {
+                    return iface.address;
+                }
+                // Otherwise, save it as a fallback just in case
+                fallbackIp = iface.address;
+            }
+        }
+    }
+    return fallbackIp;
+}
+
+app.get('/api/get-host-ip', async (req, res) => {
+    const ip = getLocalIP();
+    const PORT_NUM = process.env.PORT || 80;
+    const url = (PORT_NUM == 80)
+        ? `http://${ip}/student-login.html`
+        : `http://${ip}:${PORT_NUM}/student-login.html`;
+    try {
+        const qrDataUrl = await QRCode.toDataURL(url, {
+            width: 400,
+            margin: 2,
+            color: { dark: '#1E1B4B', light: '#FFFFFF' }
+        });
+        res.json({ success: true, ip, url, qrDataUrl });
+    } catch (err) {
+        res.json({ success: false, ip, url, qrDataUrl: null, error: err.message });
+    }
 });
 
 // Start Server

@@ -1,0 +1,13 @@
+# SLEP v3.0 - Developer Rules
+
+## Project Identity
+- Name: Secure Local Exam Portal (SLEP)
+- Environment: 100% Offline LAN (Local Area Network). 
+- Tech Stack: Node.js (Express), SQLite3, Vanilla HTML/CSS/JS.
+
+## Strict Development Rules
+1. NO FRAMEWORKS: Do not introduce React, Vue, Tailwind, or Bootstrap. Stick to modern Vanilla CSS (Variables, Grid, Flexbox) and Vanilla JS.
+2. NO EXTERNAL CDNs: The system must work without internet. Any libraries (like qrcode.js) must be downloaded and stored locally.
+3. PRESERVE BACKEND LOGIC: Do not alter the database schema (`db.js`), JWT authentication flow, or the asynchronous grading logic unless explicitly requested.
+4. OFFLINE-FIRST UI: Ensure all UI assets (fonts, icons) are bundled locally. Do not use Google Fonts or external FontAwesome links.
+5. PRESERVE LAUNCH SCRIPTS: Do not break `start.bat` or `start.command`.

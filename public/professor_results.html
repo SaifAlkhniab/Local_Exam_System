@@ -77,8 +77,8 @@
 
     <div class="header-bar">
         <div>
-            <h1>Exam Results</h1>
-            <p style="margin: 5px 0 0 0; color: #666;" id="examInfo">Loading data...</p>
+            <h1 id="examTitle">Loading exam...</h1>
+            <p style="margin: 5px 0 0 0; color: #666;" id="examInfo">Fetching results...</p>
         </div>
         <div>
             <button class="btn-back" onclick="window.location.href='/professor.html'">&#8592; Back to Dashboard</button>
@@ -95,10 +95,11 @@
                 <th>Score</th>
                 <th>Percentage</th>
                 <th>Date Submitted</th>
+                <th>Violations</th>
             </tr>
         </thead>
         <tbody id="resultsBody">
-            <tr><td colspan="6" style="text-align: center;">Loading results...</td></tr>
+            <tr><td colspan="7" style="text-align: center;">Loading results...</td></tr>
         </tbody>
     </table>
 
@@ -116,35 +117,67 @@
             window.location.href = '/professor.html';
         }
 
+        let examTitle = '';
+
         async function loadResults() {
             try {
                 const res = await fetch(`/api/prof/exams/${examId}/results`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                
-                if (!res.ok) throw new Error("Failed to load");
-                resultsData = await res.json();
-                
-                document.getElementById('examInfo').innerText = `Total Submissions: ${resultsData.length}`;
+
+                if (res.status === 401 || res.status === 403) {
+                    window.location.href = '/faculty-gateway.html';
+                    return;
+                }
+
+                const data = await res.json();
+                console.log('[RESULTS] API response:', data);
+
+                if (!res.ok) {
+                    throw new Error(data.error || `Server returned ${res.status}`);
+                }
+
+                // Support both {exam_title, results:[]} and legacy flat-array responses
+                if (Array.isArray(data)) {
+                    resultsData = data;
+                    examTitle = 'Exam #' + examId;
+                } else {
+                    examTitle = data.exam_title || ('Exam #' + examId);
+                    resultsData = Array.isArray(data.results) ? data.results : [];
+                }
+
+                document.getElementById('examTitle').innerText = 'Results for: ' + examTitle;
+                document.getElementById('examInfo').innerText = `${resultsData.length} student submission(s)`;
                 renderTable();
 
             } catch (err) {
-                document.getElementById('resultsBody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Error loading results.</td></tr>`;
+                console.error('[RESULTS] Load failed:', err.message);
+                document.getElementById('examTitle').innerText = 'Error Loading Results';
+                document.getElementById('examInfo').innerText = err.message;
+                document.getElementById('resultsBody').innerHTML =
+                    `<tr><td colspan="7" style="text-align:center; color:red;">
+                        Failed to load results: ${err.message}
+                    </td></tr>`;
             }
         }
 
         function renderTable() {
             const tbody = document.getElementById('resultsBody');
             if (resultsData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center;">No students have submitted this exam yet.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align: center;">No students have submitted this exam yet.</td></tr>`;
                 return;
             }
 
             tbody.innerHTML = '';
             resultsData.forEach((row, index) => {
                 const percentage = Math.round((row.score / row.max_score) * 100);
-                const date = new Date(row.timestamp).toLocaleString();
-                
+                const date = new Date((row.timestamp || '').replace(' ', 'T') + 'Z')
+                    .toLocaleString('en-GB', { timeZone: 'Asia/Baghdad' });
+                const viol = row.violations || 0;
+                const violCell = viol > 0
+                    ? `<td style="color:red;font-weight:bold;">${viol}</td>`
+                    : `<td style="color:#999;">0</td>`;
+
                 tbody.innerHTML += `
                     <tr>
                         <td>${index + 1}</td>
@@ -153,6 +186,7 @@
                         <td><span class="score-badge">${row.score} / ${row.max_score}</span></td>
                         <td><strong>${percentage}%</strong></td>
                         <td><small>${date}</small></td>
+                        ${violCell}
                     </tr>
                 `;
             });
@@ -163,18 +197,20 @@
             
             let csvContent = "data:text/csv;charset=utf-8,";
             // FIX: Replaced \\n with actual \r\n for proper Excel line breaks
-            csvContent += "University ID,Student Name,Score,Max Score,Percentage,Date Submitted\r\n";
-            
+            csvContent += "University ID,Student Name,Score,Max Score,Percentage,Date Submitted,Violations\r\n";
+
             resultsData.forEach(row => {
                 const percentage = Math.round((row.score / row.max_score) * 100);
-                // FIX: Replaced \\n with \r\n here as well
-                csvContent += `"${row.university_id}","${row.student_name}",${row.score},${row.max_score},${percentage}%,"${new Date(row.timestamp).toLocaleString()}"\r\n`;
+                const date = new Date((row.timestamp || '').replace(' ', 'T') + 'Z')
+                    .toLocaleString('en-GB', { timeZone: 'Asia/Baghdad' });
+                csvContent += `"${row.university_id}","${row.student_name}",${row.score},${row.max_score},${percentage}%,"${date}",${row.violations || 0}\r\n`;
             });
 
+            const safeTitle = examTitle.replace(/[^a-zA-Z0-9\u0600-\u06FF _-]/g, '').trim() || examId;
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
             link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `Exam_${examId}_Results.csv`);
+            link.setAttribute("download", `Results - ${safeTitle}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);

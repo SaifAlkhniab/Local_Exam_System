@@ -60,9 +60,10 @@ const db = new sqlite3.Database(path.join(__dirname, 'exam_system.db'), (err) =>
                 q_display_count INTEGER DEFAULT NULL,
                 shuffle_questions BOOLEAN DEFAULT 0,
                 shuffle_options BOOLEAN DEFAULT 0,
+                prevent_backtracking BOOLEAN DEFAULT 0,
                 policy_id INTEGER,
                 is_active BOOLEAN DEFAULT 0,
-                is_closed BOOLEAN DEFAULT 0, 
+                is_closed BOOLEAN DEFAULT 0,
                 FOREIGN KEY(professor_id) REFERENCES Professors(id),
                 FOREIGN KEY(group_id) REFERENCES Groups(id)
             )`);
@@ -88,6 +89,24 @@ const db = new sqlite3.Database(path.join(__dirname, 'exam_system.db'), (err) =>
                 }
             });
 
+            // MIGRATION: Add violations column to Results if it doesn't exist (for older DBs)
+            db.run(`ALTER TABLE Results ADD COLUMN violations INTEGER DEFAULT 0`, (err) => {
+                if (!err) console.log("Migration: Added 'violations' column to Results table.");
+            });
+
+            // MIGRATION: prevent_backtracking on Exams (for older DBs)
+            db.run(`ALTER TABLE Exams ADD COLUMN prevent_backtracking BOOLEAN DEFAULT 0`, (err) => {
+                if (!err) console.log("Migration: Added 'prevent_backtracking' column to Exams table.");
+            });
+
+            // MIGRATION: Session tracking columns on Results (for older DBs)
+            db.run(`ALTER TABLE Results ADD COLUMN status TEXT DEFAULT 'submitted'`, (err) => {
+                if (!err) console.log("Migration: Added 'status' column to Results table.");
+            });
+            db.run(`ALTER TABLE Results ADD COLUMN started_at DATETIME`, (err) => {
+                if (!err) console.log("Migration: Added 'started_at' column to Results table.");
+            });
+
             // 8. Results Table
             db.run(`CREATE TABLE IF NOT EXISTS Results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,6 +115,8 @@ const db = new sqlite3.Database(path.join(__dirname, 'exam_system.db'), (err) =>
                 score INTEGER NOT NULL,
                 max_score INTEGER NOT NULL,
                 violations INTEGER DEFAULT 0,
+                status TEXT DEFAULT 'submitted',
+                started_at DATETIME,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(exam_id) REFERENCES Exams(id),
                 FOREIGN KEY(student_id) REFERENCES Students(id)

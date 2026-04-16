@@ -2,54 +2,390 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Professor Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professor Dashboard — SLEP</title>
     <style>
-        :root { --primary: #2c3e50; --secondary: #34495e; --accent: #2980b9; --bg: #f4f6f9; --danger: #e74c3c; --success: #27ae60; }
-        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg); margin: 0; display: flex; height: 100vh; overflow: hidden; }
-        
-        /* Layout & Collapsibles */
-        .sidebar { width: 250px; background: var(--primary); color: white; display: flex; flex-direction: column; transition: width 0.3s ease; white-space: nowrap; overflow: hidden; }
+        /* ── Design Tokens ── */
+        :root {
+            /* Legacy aliases (keep for inline styles & JS-generated HTML) */
+            --primary:   #1E1B4B;
+            --secondary: #312E81;
+            --accent:    #4F46E5;
+            --bg:        #EEF0FF;
+            --success:   #10B981;
+            --danger:    #EF4444;
+
+            /* Brand scale */
+            --brand-900: #1E1B4B;
+            --brand-800: #312E81;
+            --brand-700: #3730A3;
+            --brand-600: #4338CA;
+            --brand-500: #4F46E5;
+            --brand-400: #6366F1;
+            --brand-300: #818CF8;
+            --brand-200: #C7D2FE;
+
+            /* Neutrals */
+            --gray-900: #111827;
+            --gray-800: #1F2937;
+            --gray-700: #374151;
+            --gray-600: #4B5563;
+            --gray-500: #6B7280;
+            --gray-400: #9CA3AF;
+            --gray-300: #D1D5DB;
+            --gray-200: #E5E7EB;
+            --gray-100: #F3F4F6;
+            --gray-50:  #F9FAFB;
+
+            /* Glass */
+            --glass-bg:     rgba(255,255,255,0.75);
+            --glass-border: rgba(255,255,255,0.90);
+
+            /* Shadows */
+            --shadow-sm: 0 1px 4px rgba(0,0,0,0.07);
+            --shadow-md: 0 4px 20px rgba(0,0,0,0.09);
+            --shadow-lg: 0 10px 40px rgba(0,0,0,0.12);
+
+            /* Radius */
+            --r-sm: 8px;
+            --r-md: 12px;
+            --r-lg: 18px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--gray-800);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ── SIDEBAR ── */
+        .sidebar {
+            width: 240px;
+            background: linear-gradient(180deg, #1E1B4B 0%, #2D2B77 100%);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            transition: width 0.28s cubic-bezier(0.4,0,0.2,1);
+            white-space: nowrap;
+            overflow: hidden;
+            flex-shrink: 0;
+            box-shadow: 4px 0 28px rgba(0,0,0,0.18);
+            z-index: 20;
+        }
         .sidebar.collapsed { width: 0; }
-        .sidebar h2 { text-align: center; padding: 20px 0; margin: 0; background: #1a252f; font-size: 20px; }
-        .nav-btn { padding: 15px 20px; background: none; border: none; color: white; text-align: left; cursor: pointer; font-size: 16px; border-bottom: 1px solid var(--secondary); transition: 0.2s; }
-        .nav-btn:hover, .nav-btn.active { background: var(--accent); }
-        .logout-btn { margin-top: auto; background: var(--danger); }
-        
-        .content-area { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        .top-bar { background: white; padding: 10px 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 15px; z-index: 10; }
-        .toggle-btn { background: var(--secondary); color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        .toggle-btn:hover { background: var(--primary); }
-        
-        .main { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 4px solid var(--accent); flex: 1; transition: 0.3s ease; }
-        .groups-panel { max-width: 350px; min-width: 250px; }
+
+        .sidebar h2 {
+            text-align: center;
+            padding: 22px 20px;
+            margin: 0;
+            font-size: 16px;
+            font-weight: 700;
+            color: #C7D2FE;
+            letter-spacing: 0.03em;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            background: rgba(0,0,0,0.18);
+        }
+
+        .nav-btn {
+            padding: 14px 20px;
+            background: none;
+            border: none;
+            border-left: 3px solid transparent;
+            color: rgba(199,210,254,0.72);
+            text-align: left;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: inherit;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            transition: background 0.18s, color 0.18s, border-color 0.18s;
+            white-space: nowrap;
+        }
+        .nav-btn:hover {
+            background: rgba(255,255,255,0.08);
+            color: #E0E7FF;
+        }
+        .nav-btn.active {
+            background: rgba(99,102,241,0.22);
+            color: white;
+            border-left-color: var(--brand-300);
+            font-weight: 600;
+        }
+        .logout-btn {
+            margin-top: auto !important;
+            background: rgba(239,68,68,0.14) !important;
+            color: #FCA5A5 !important;
+            border-top: 1px solid rgba(239,68,68,0.18) !important;
+            border-left-color: transparent !important;
+        }
+        .logout-btn:hover {
+            background: rgba(239,68,68,0.24) !important;
+            color: #FEE2E2 !important;
+        }
+
+        /* ── LAYOUT ── */
+        .content-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        .top-bar {
+            background: rgba(255,255,255,0.82);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            padding: 11px 20px;
+            box-shadow: 0 1px 0 rgba(0,0,0,0.07);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .toggle-btn {
+            background: var(--brand-700);
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: var(--r-sm);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            font-family: inherit;
+            transition: background 0.18s;
+        }
+        .toggle-btn:hover { background: var(--brand-600); }
+
+        .main {
+            flex-grow: 1;
+            padding: 20px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        /* ── CARDS ── */
+        .card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--r-lg);
+            padding: 22px;
+            box-shadow: var(--shadow-md);
+            flex: 1;
+            transition: box-shadow 0.2s;
+        }
+        .groups-panel { max-width: 320px; min-width: 255px; flex: none; display: flex !important; flex-direction: column !important; overflow: hidden; }
+        #groupsList { flex: 1; overflow-y: auto; min-height: 0; }
         .groups-panel.collapsed { display: none; }
-        
-        h3 { margin-top: 0; color: var(--primary); border-bottom: 1px solid #eee; padding-bottom: 10px; }
-        input, select { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { padding: 8px 12px; border: none; border-radius: 4px; background: var(--accent); color: white; cursor: pointer; font-weight: bold; }
-        button:hover { opacity: 0.9; }
-        
-        /* Scrollable Table CSS */
-        .table-container { max-height: 350px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px; margin-top: 15px; }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
-        th { background: #f8f9fa; position: sticky; top: 0; z-index: 1; box-shadow: 0 2px 2px -1px rgba(0,0,0,0.1); }
-        
-        .group-item { padding: 10px; border: 1px solid #eee; margin-bottom: 5px; cursor: pointer; border-radius: 4px; background: #fafafa; display: flex; justify-content: space-between; align-items: center; }
-        .group-item:hover, .group-item.active { background: #e0f7fa; border-color: #00bcd4; }
-        .btn-danger { background: var(--danger); width: auto; padding: 5px 10px; font-size: 12px; }
 
-        /* Tabs CSS */
+        /* ── TYPOGRAPHY ── */
+        h3 {
+            margin-top: 0;
+            color: var(--gray-800);
+            font-size: 15px;
+            font-weight: 700;
+            border-bottom: 1px solid var(--gray-200);
+            padding-bottom: 11px;
+            margin-bottom: 15px;
+        }
+        h4 {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--gray-700);
+            margin: 0 0 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        /* ── FORM ELEMENTS ── */
+        input, select, textarea {
+            width: 100%;
+            padding: 9px 13px;
+            margin-bottom: 12px;
+            border: 1.5px solid var(--gray-200);
+            border-radius: var(--r-sm);
+            font-size: 13px;
+            font-family: inherit;
+            color: var(--gray-800);
+            background: white;
+            transition: border-color 0.18s, box-shadow 0.18s;
+            box-sizing: border-box;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--brand-400);
+            box-shadow: 0 0 0 3px rgba(99,102,241,0.14);
+        }
+        input[type="file"] {
+            padding: 7px 10px;
+            background: var(--gray-50);
+            cursor: pointer;
+            font-size: 12px;
+        }
+        input[type="checkbox"] {
+            width: auto;
+            margin-bottom: 0;
+            accent-color: var(--brand-500);
+            transform: scale(1.15);
+        }
+        input[type="number"] { -moz-appearance: textfield; }
+
+        /* ── BUTTONS ── */
+        button {
+            padding: 8px 14px;
+            border: none;
+            border-radius: var(--r-sm);
+            background: var(--brand-500);
+            color: white;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            font-family: inherit;
+            transition: background 0.18s, opacity 0.18s;
+        }
+        button:hover { opacity: 0.88; }
+
+        .btn-danger {
+            background: var(--danger) !important;
+            width: auto;
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+
+        /* ── TABLES ── */
+        .table-container {
+            max-height: 350px;
+            overflow-y: auto;
+            border: 1px solid var(--gray-200);
+            border-radius: var(--r-md);
+            margin-top: 12px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th, td {
+            padding: 10px 13px;
+            text-align: left;
+            border-bottom: 1px solid var(--gray-100);
+        }
+        th {
+            background: var(--gray-50);
+            font-weight: 700;
+            font-size: 11px;
+            color: var(--gray-500);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            box-shadow: 0 1px 0 var(--gray-200);
+        }
+        tr:last-child td { border-bottom: none; }
+        tbody tr:hover td { background: var(--gray-50); }
+
+        /* ── GROUP ITEMS ── */
+        .group-item {
+            padding: 11px 13px;
+            border: 1.5px solid var(--gray-200);
+            margin-bottom: 6px;
+            cursor: pointer;
+            border-radius: var(--r-md);
+            background: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            transition: background 0.18s, border-color 0.18s;
+        }
+        .group-item:hover { background: #EEF2FF; border-color: var(--brand-200); }
+        .group-item.active { background: #EEF2FF; border-color: var(--brand-400); color: var(--brand-700); }
+
+        /* ── TAB SYSTEM ── */
         .tab-content { display: none; width: 100%; }
-        .tab-content.active { display: flex; gap: 20px; align-items: flex-start; }
-        .flex-1 { flex: 1; }
+        .tab-content.active { display: flex; gap: 20px; align-items: stretch; flex: 1; min-height: 0; overflow: hidden; }
+        .flex-1 { flex: 1; min-width: 0; }
 
-        /* Temporarily hiding the Edit Question button */
+        /* Exam list items (JS-generated) — enhanced */
+        #examsList > div { border-radius: var(--r-md) !important; border: 1.5px solid var(--gray-200) !important; margin-bottom: 8px !important; transition: box-shadow 0.18s; }
+        #examsList > div:hover { box-shadow: var(--shadow-sm); }
+
+        /* Question type badge */
+        span[style*="background:#eee"] {
+            background: var(--gray-100) !important;
+            color: var(--gray-600) !important;
+            border-radius: 6px !important;
+            font-weight: 700 !important;
+        }
+
+        /* Status badges in dynamically generated HTML */
+        span[style*="background:#27ae60"] { background: #D1FAE5 !important; color: #065F46 !important; border-radius: 999px !important; }
+        span[style*="background:#7f8c8d"] { background: var(--gray-100) !important; color: var(--gray-600) !important; border-radius: 999px !important; }
+
+        /* Temporarily hiding the Edit Question button (original rule preserved) */
         button[onclick^="editQuestion"],
-        button[onclick^="startEdit"] {
-            display: none !important;
-}        
+        button[onclick^="startEdit"] { display: none !important; }
+
+        /* ── GROUP VIEW COMPACT REDESIGN ── */
+        /* Student section: fills remaining tab height, controls pinned, table scrolls */
+        #studentSection {
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        /* Pinned controls row — never scrolls away */
+        #studentSection > div:first-child,
+        #studentSearch {
+            flex-shrink: 0;
+        }
+
+        /* Collapsible add-student form panel */
+        #studentFormPanel {
+            display: none;
+            flex-shrink: 0;
+            background: var(--gray-50);
+            border: 1px solid var(--gray-200);
+            border-radius: var(--r-md);
+            padding: 14px 16px;
+            margin-bottom: 12px;
+        }
+
+        /* Table fills remaining space and scrolls internally */
+        #studentSection .table-container {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 150px;
+            max-height: none;
+        }
+
+        .add-student-toggle {
+            background: var(--brand-600) !important;
+            font-size: 12px !important;
+            padding: 6px 12px !important;
+        }
+        .add-student-toggle.open { background: var(--gray-600) !important; }
+
+        /* ── EXAM PANEL: list fills remaining height when form is closed ── */
+        #examFormBody { flex-shrink: 0; }
+        #examsList { flex: 1 !important; overflow-y: auto !important; max-height: none !important; min-height: 0; border: 1px solid var(--gray-200); border-radius: var(--r-sm); padding: 4px; }
+
+        /* ── QUESTION BUILDER: form accordion + table stretch ── */
+        #questionFormBody { flex-shrink: 0; overflow-y: auto; max-height: 360px; }
+        #questionBuilder .table-container { flex: 1 !important; max-height: none !important; min-height: 100px; overflow-y: auto; }
     </style>
 </head>
 <body>
@@ -80,92 +416,114 @@
                 </div>
 
                 <div class="card flex-1" id="studentSection" style="display: none;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px;">
-                        <h3 style="border:none; padding:0; margin:0;">2. Students in: <span id="currentGroupName" style="color:var(--accent);"></span></h3>
-                        <button onclick="exportStudentsCsv()" style="background: #34495e;">Export Current Class</button>
-                    </div>
-                    
-                    <div style="display: flex; gap: 20px;">
-                        <div style="flex: 1; border-right: 1px solid #eee; padding-right: 20px;">
-                            <h4>Add Single Student</h4>
-                            <input type="text" id="studID" placeholder="University ID (e.g. 2026001)">
-                            <input type="text" id="studName" placeholder="Student Name">
-                            <input type="password" id="studPass" placeholder="Password">
-                            <button onclick="addStudent()" style="width: 100%;">Add Student</button>
-                        </div>
-                        <div style="flex: 1;">
-                            <h4>Bulk CSV Import</h4>
-                            <button onclick="downloadStudentTemplate()" style="background: #f39c12; margin-bottom: 15px; width: 100%;">Download Template</button>
-                            <input type="file" id="studCsvFile" accept=".csv">
-                            <button onclick="uploadStudentCsv()" style="background: #27ae60; width: 100%;">Upload CSV</button>
+                    <!-- Compact header row -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--gray-200);">
+                        <h3 style="border:none; padding:0; margin:0; font-size:14px;">Students in: <span id="currentGroupName" style="color:var(--accent);"></span></h3>
+                        <div style="display:flex; gap:6px;">
+                            <button class="add-student-toggle" id="addStudentToggleBtn" onclick="toggleStudentForm()">&#43; Add Students</button>
+                            <button onclick="exportStudentsCsv()" style="background: #34495e; font-size:12px; padding:6px 12px;">Export CSV</button>
                         </div>
                     </div>
 
-                    <input type="text" id="studentSearch" onkeyup="filterStudents()" placeholder="🔍 Search by Name or University ID..." style="margin-top: 20px; border: 2px solid var(--accent);">
+                    <!-- Collapsible add-student form panel -->
+                    <div id="studentFormPanel">
+                        <div style="display: flex; gap: 16px;">
+                            <div style="flex: 1; border-right: 1px solid var(--gray-200); padding-right: 16px;">
+                                <h4>Add Single Student</h4>
+                                <input type="text" id="studID" placeholder="University ID (e.g. 2026001)">
+                                <input type="text" id="studName" placeholder="Student Name">
+                                <input type="password" id="studPass" placeholder="Password">
+                                <button onclick="addStudent()" style="width: 100%;">Add Student</button>
+                            </div>
+                            <div style="flex: 1;">
+                                <h4>Bulk CSV Import</h4>
+                                <button onclick="downloadStudentTemplate()" style="background: #f39c12; margin-bottom: 10px; width: 100%;">Download Template</button>
+                                <input type="file" id="studCsvFile" accept=".csv">
+                                <button onclick="uploadStudentCsv()" style="background: #27ae60; width: 100%;">Upload CSV</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <input type="text" id="studentSearch" onkeyup="filterStudents()" placeholder="🔍 Search by Name or University ID..." style="margin-bottom: 8px; border: 2px solid var(--accent);">
 
                     <div class="table-container">
                         <table id="studentsTable">
                             <tr><th>#</th><th>Univ ID</th><th>Name</th><th>Status</th><th>Actions</th></tr>
-                            </table>
+                        </table>
                     </div>
                 </div>
             </div>
 
             <div id="examsTab" class="tab-content">
                 <div class="card groups-panel" id="examPanel">
-                    <h3>Create New Exam</h3>
-                    <select id="examGroupSelect"><option value="">Loading Groups...</option></select>
-                    <input type="text" id="examTitle" placeholder="Exam Title (e.g. Midterm 1)">
-                    <input type="number" id="examDuration" placeholder="Duration (Minutes)">
-                    <input type="number" id="qDisplayCount" placeholder="Show how many questions? (0 = All)" title="How many questions should the student see from the total bank?">
-                    <div style="display:flex; gap: 15px; margin-bottom: 15px; font-size: 14px;">
-                        <label><input type="checkbox" id="shuffleQs" checked> Shuffle Questions</label>
-                        <label><input type="checkbox" id="shuffleOpts" checked> Shuffle Options</label>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                        <h3 style="border:none; padding:0; margin:0;">My Exams</h3>
+                        <button id="examFormToggleBtn" onclick="toggleExamForm()" style="background:var(--success); font-size:12px; padding:6px 12px;">+ Create New Exam</button>
                     </div>
-                    <button onclick="createExam()" style="width: 100%; background: var(--success);">Create Exam</button>
-                    
-                    <h3 style="margin-top: 20px;">My Exams</h3>
-                    <div id="examsList" style="max-height: 350px; overflow-y: auto; border: 1px solid #eee; padding: 5px; border-radius: 4px;"></div>
+
+                    <div id="examFormBody" style="display:none; background:var(--gray-50); border:1px solid var(--gray-200); border-radius:var(--r-md); padding:14px; margin-bottom:14px;">
+                        <h4 style="margin-bottom:12px;">New Exam Details</h4>
+                        <select id="examGroupSelect"><option value="">Select a Group...</option></select>
+                        <input type="text" id="examTitle" placeholder="Exam Title (e.g. Midterm 1)">
+                        <input type="number" id="examDuration" placeholder="Duration (Minutes)">
+                        <input type="number" id="qDisplayCount" placeholder="Show how many questions? (0 = All)" title="How many questions should the student see from the total bank?">
+                        <div style="display:flex; gap: 15px; margin-bottom: 12px; font-size: 14px; flex-wrap: wrap;">
+                            <label><input type="checkbox" id="shuffleQs" checked> Shuffle Questions</label>
+                            <label><input type="checkbox" id="shuffleOpts" checked> Shuffle Options</label>
+                        </div>
+                        <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:14px; font-size:13px; color:var(--gray-700); cursor:pointer;">
+                            <input type="checkbox" id="preventBacktrack" style="margin-top:2px; flex-shrink:0;">
+                            <span>Strict Mode: Prevent students from returning to previous questions.</span>
+                        </label>
+                        <button onclick="createExam()" style="width: 100%; background: var(--success);">Create Exam</button>
+                    </div>
+
+                    <div id="examsList"></div>
                 </div>
 
-                <div class="card flex-1" id="questionBuilder" style="display: none; display: flex; flex-direction: column;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h3>Questions for: <span id="currentExamName" style="color:var(--accent);"></span></h3>
-                        <div style="display: flex; gap: 10px; align-items: center;">
+                <div class="card flex-1" id="questionBuilder" style="display: none; flex-direction: column;">
+
+                    <!-- Pinned header: exam name + toggle + ZIP buttons -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-shrink:0; flex-wrap:wrap; gap:6px;">
+                        <h3 style="margin:0; border:none; padding:0;">Questions for: <span id="currentExamName" style="color:var(--accent);"></span></h3>
+                        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                            <button id="qFormToggleBtn" onclick="toggleQuestionForm()" style="background:var(--success); font-size:12px; padding:6px 12px;">+ New Question</button>
                             <input type="file" id="examZipFile" accept=".zip" style="width: auto; margin: 0; padding: 5px;">
                             <button onclick="uploadExamZip()" style="background: #27ae60;">Upload ZIP</button>
                             <button onclick="exportExamZip()" style="background: #34495e;">⬆️ Export ZIP</button>
                             <button onclick="downloadZipTemplate()" style="background: #f39c12;">⬇️ Template</button>
                         </div>
                     </div>
-                    
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #ddd;">
-                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                            <select id="qType" onchange="renderOptionsUI()" style="flex: 1; margin-bottom:0;">
+
+                    <!-- Collapsible create-question form -->
+                    <div id="questionFormBody" style="display:none; background:#f8f9fa; padding:15px; border-radius:5px; margin-bottom:12px; border:1px solid #ddd;">
+                        <div style="display:flex; gap:10px; margin-bottom:10px;">
+                            <select id="qType" onchange="renderOptionsUI()" style="flex:1; margin-bottom:0;">
                                 <option value="mcq">Multiple Choice (1 Correct)</option>
                                 <option value="ma">Multiple Answer (Checkbox)</option>
                                 <option value="tf">True / False</option>
                                 <option value="fib">Fill in the Blank</option>
                             </select>
-                            <input type="number" id="qPoints" value="1" placeholder="Pts" style="width: 80px; margin-bottom:0;">
-                        </div>
-                        
-                        <textarea id="qText" placeholder="Type your question here... (Long text supported)" style="width: 100%; height: 80px; padding: 10px; border-radius: 4px; border: 1px solid #ccc; margin-bottom: 10px; resize: vertical; box-sizing:border-box;"></textarea>
-                        
-                        <div style="margin-bottom: 10px;">
-                            <label style="font-size: 12px; font-weight: bold; color: var(--secondary);">Attach Image (Optional):</label>
-                            <input type="file" id="qImage" accept="image/*" style="margin-bottom: 0; padding: 5px;">
+                            <input type="number" id="qPoints" value="1" placeholder="Pts" style="width:80px; margin-bottom:0;">
                         </div>
 
-                        <div id="dynamicOptionsContainer" style="border-top: 1px dashed #ccc; padding-top: 10px; margin-bottom: 10px;"></div>
-                        
-                        <div style="display: flex; gap: 10px;">
-                            <button id="saveQuestionBtn" onclick="addQuestion()" style="flex: 1;">+ Save Question</button>
-                            <button id="cancelEditBtn" onclick="cancelEdit()" style="background: #7f8c8d; display: none;">Cancel Edit</button>
+                        <textarea id="qText" placeholder="Type your question here... (Long text supported)" style="width:100%; height:80px; padding:10px; border-radius:4px; border:1px solid #ccc; margin-bottom:10px; resize:vertical; box-sizing:border-box;"></textarea>
+
+                        <div style="margin-bottom:10px;">
+                            <label style="font-size:12px; font-weight:bold; color:var(--secondary);">Attach Image (Optional):</label>
+                            <input type="file" id="qImage" accept="image/*" style="margin-bottom:0; padding:5px;">
+                        </div>
+
+                        <div id="dynamicOptionsContainer" style="border-top:1px dashed #ccc; padding-top:10px; margin-bottom:10px;"></div>
+
+                        <div style="display:flex; gap:10px;">
+                            <button id="saveQuestionBtn" onclick="addQuestion()" style="flex:1;">+ Save Question</button>
+                            <button id="cancelEditBtn" onclick="cancelEdit()" style="background:#7f8c8d; display:none;">Cancel Edit</button>
                         </div>
                     </div>
 
-                    <div class="table-container" style="flex-grow: 1;">
+                    <!-- Questions table — fills all remaining vertical space -->
+                    <div class="table-container">
                         <table id="questionsTable">
                             <tr><th>#</th><th>Type</th><th>Question</th><th>Answer</th><th>Pts</th><th>Act</th></tr>
                         </table>
@@ -192,7 +550,7 @@
 
 <script>
     const token = localStorage.getItem('slep_token');
-    if (!token || localStorage.getItem('slep_role') !== 'professor') window.location.href = '/';
+    if (!token || localStorage.getItem('slep_role') !== 'professor') window.location.href = '/faculty-gateway.html';
 
     let currentGroupId = null;
     let currentStudentsData = []; 
@@ -208,7 +566,7 @@
         return res.json();
     }
 
-    function logout() { localStorage.clear(); window.location.href = '/'; }
+    function logout() { localStorage.clear(); window.location.href = '/faculty-gateway.html'; }
 
     // --- TAB SWITCHER ---
     function switchTab(tabId, btnElement) {
@@ -239,6 +597,16 @@
                 }
             }       
         }
+    }
+
+    // --- STUDENT FORM TOGGLE ---
+    function toggleStudentForm() {
+        const panel = document.getElementById('studentFormPanel');
+        const btn = document.getElementById('addStudentToggleBtn');
+        const isOpen = panel.style.display === 'block';
+        panel.style.display = isOpen ? 'none' : 'block';
+        btn.textContent = isOpen ? '+ Add Students' : '✕ Close';
+        btn.classList.toggle('open', !isOpen);
     }
 
     // --- GROUPS LOGIC ---
@@ -379,16 +747,35 @@
         });
     }
 
+    function toggleQuestionForm() {
+        const body = document.getElementById('questionFormBody');
+        const btn  = document.getElementById('qFormToggleBtn');
+        const isOpen = body.style.display !== 'none';
+        body.style.display = isOpen ? 'none' : 'block';
+        btn.textContent = isOpen ? '+ New Question' : '✕ Close Form';
+        btn.style.background = isOpen ? 'var(--success)' : 'var(--gray-600)';
+    }
+
+    function toggleExamForm() {
+        const body = document.getElementById('examFormBody');
+        const btn = document.getElementById('examFormToggleBtn');
+        const isOpen = body.style.display !== 'none';
+        body.style.display = isOpen ? 'none' : 'block';
+        btn.textContent = isOpen ? '+ Create New Exam' : '✕ Close Form';
+        btn.style.background = isOpen ? 'var(--success)' : 'var(--gray-600)';
+    }
+
     async function createExam() {
-        const payload = { 
-            group_id: document.getElementById('examGroupSelect').value, 
-            title: document.getElementById('examTitle').value, 
+        const payload = {
+            group_id: document.getElementById('examGroupSelect').value,
+            title: document.getElementById('examTitle').value,
             duration_minutes: document.getElementById('examDuration').value,
             shuffle_questions: document.getElementById('shuffleQs').checked,
             shuffle_options: document.getElementById('shuffleOpts').checked,
-            q_display_count: document.getElementById('qDisplayCount').value || 0
+            q_display_count: document.getElementById('qDisplayCount').value || 0,
+            prevent_backtracking: document.getElementById('preventBacktrack').checked
         };
-        
+
         if(!payload.group_id || !payload.title || !payload.duration_minutes) return alert("Fill all fields");
         await apiCall('/api/prof/exams', { method: 'POST', body: JSON.stringify(payload) });
         loadExamsAndGroups();
@@ -407,6 +794,11 @@
         currentExamId = id;
         document.getElementById('currentExamName').innerText = title;
         document.getElementById('questionBuilder').style.display = 'flex';
+        // Always start with the form collapsed when switching exams
+        document.getElementById('questionFormBody').style.display = 'none';
+        const qBtn = document.getElementById('qFormToggleBtn');
+        qBtn.textContent = '+ New Question';
+        qBtn.style.background = 'var(--success)';
         renderOptionsUI();
         loadQuestions();
     }
@@ -434,7 +826,9 @@
                     <label><strong>Define Options & Mark Correct Answer(s):</strong></label>
                     <button onclick="addOptionRow()" style="background:var(--secondary); padding:4px 8px; font-size:12px;">+ Add Option</button>
                 </div>
-                <div id="optionsList" style="margin-top:10px;"></div>
+                <div style="display:block; max-height:200px; overflow-y:auto; margin-top:10px; padding-right:4px;">
+                    <div id="optionsList"></div>
+                </div>
             `;
             // Add 4 defaults
             for(let i=0; i<4; i++) addOptionRow();

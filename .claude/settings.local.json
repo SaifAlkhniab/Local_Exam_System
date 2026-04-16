@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(node -e \"const QRCode = require\\('qrcode'\\); const os = require\\('os'\\); console.log\\('qrcode OK, os OK'\\); QRCode.toDataURL\\('http://test', {width:100}, \\(err, url\\) => { if\\(err\\) { console.error\\('QR ERROR:', err\\); } else { console.log\\('QR generation OK, data URL length:', url.length\\); } }\\);\")"
+    ]
+  }
+}

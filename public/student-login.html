@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Login — SLEP</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(160deg, #EFF6FF 0%, #DBEAFE 60%, #E0E7FF 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-card {
+            background: white;
+            border-radius: 24px;
+            padding: 48px 44px;
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+            box-shadow: 0 4px 40px rgba(37,99,235,0.10), 0 1px 6px rgba(0,0,0,0.05);
+            border: 1.5px solid #DBEAFE;
+        }
+
+        .logo-ring {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 68px;
+            height: 68px;
+            background: linear-gradient(135deg, #2563EB, #60A5FA);
+            border-radius: 22px;
+            font-size: 32px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(37,99,235,0.28);
+        }
+
+        h2 {
+            font-size: 25px;
+            font-weight: 700;
+            color: #1E3A8A;
+            margin-bottom: 6px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #6B7280;
+            margin-bottom: 32px;
+            line-height: 1.5;
+        }
+
+        .field {
+            margin-bottom: 16px;
+            text-align: left;
+        }
+
+        .field label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            color: #4B5563;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            margin-bottom: 8px;
+        }
+
+        input {
+            width: 100%;
+            padding: 13px 16px;
+            background: #EFF6FF;
+            border: 1.5px solid #BFDBFE;
+            border-radius: 12px;
+            color: #1E3A8A;
+            font-size: 15px;
+            font-family: inherit;
+            transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+        }
+        input::placeholder { color: #9CA3AF; }
+        input:focus {
+            outline: none;
+            border-color: #3B82F6;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+        }
+
+        button[type="submit"] {
+            width: 100%;
+            padding: 14px;
+            margin-top: 8px;
+            background: linear-gradient(135deg, #2563EB 0%, #3B82F6 100%);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-size: 15px;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            transition: transform 0.18s, box-shadow 0.18s;
+            box-shadow: 0 4px 16px rgba(37,99,235,0.35);
+            letter-spacing: 0.02em;
+        }
+        button[type="submit"]:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(37,99,235,0.5);
+        }
+        button[type="submit"]:active { transform: translateY(0); }
+
+        #errorMsg {
+            color: #B91C1C;
+            font-size: 13px;
+            margin-top: 14px;
+            display: none;
+            background: #FEF2F2;
+            border: 1px solid #FECACA;
+            border-radius: 10px;
+            padding: 10px 14px;
+            text-align: left;
+        }
+
+        .pw-wrap { position: relative; }
+        .pw-wrap input { padding-right: 44px; width: 100%; }
+        .eye-btn {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 17px;
+            color: #9CA3AF;
+            padding: 0;
+            line-height: 1;
+            width: auto;
+        }
+        .eye-btn:hover { color: #4B5563; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="logo-ring">🎓</div>
+        <h2>Student Portal</h2>
+        <p class="subtitle">Enter your username and password to access your exams</p>
+
+        <form id="loginForm">
+            <div class="field">
+                <label>USERNAME</label>
+                <input type="text" id="username" placeholder="e.g. 2024001" required autocomplete="username">
+            </div>
+            <div class="field">
+                <label>Password</label>
+                <div class="pw-wrap">
+                    <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
+                    <button type="button" class="eye-btn" id="eyeBtn" onclick="togglePw()" tabindex="-1" aria-label="Show password"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                </div>
+            </div>
+            <button type="submit">Log In</button>
+        </form>
+
+        <div id="errorMsg"></div>
+    </div>
+
+    <script>
+        const EYE_OPEN = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+        const EYE_SHUT = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+        function togglePw() {
+            const input = document.getElementById('password');
+            const btn = document.getElementById('eyeBtn');
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.innerHTML = EYE_SHUT;
+            } else {
+                input.type = 'password';
+                btn.innerHTML = EYE_OPEN;
+            }
+        }
+
+        // Clear any stale professor tokens on load
+        localStorage.removeItem('slep_token');
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errorDiv = document.getElementById('errorMsg');
+            errorDiv.style.display = 'none';
+
+            try {
+                const res = await fetch('/api/student/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        university_id: document.getElementById('username').value,
+                        password: document.getElementById('password').value
+                    })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    localStorage.setItem('studentToken', data.token);
+                    localStorage.setItem('studentName', data.name);
+                    window.location.href = '/student_dashboard.html';
+                } else {
+                    errorDiv.innerText = data.error || 'Invalid credentials.';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (err) {
+                errorDiv.innerText = 'Server connection failed.';
+                errorDiv.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -31,10 +31,21 @@ if not exist .env (
     copy .env.example .env >nul
 )
 
-:: Start the server
+:: Start the server in a separate window so this script can continue
 echo.
 echo Launching Server...
-node server.js
+start "SLEP v3.0 - Server" cmd /c node server.js
 
-:: Keep window open if the server crashes
+:: Wait 2 seconds for the server to initialize
+timeout /t 2 /nobreak >nul
+
+:: Open the Class Lobby in the default browser
+echo Opening Class Lobby in browser...
+start "" "http://localhost/lobby.html"
+
+echo.
+echo =========================================
+echo  SLEP v3.0 is RUNNING!
+echo  Close the "SLEP v3.0 - Server" window to stop.
+echo =========================================
 pause
