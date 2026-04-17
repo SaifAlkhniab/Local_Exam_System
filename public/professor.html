@@ -782,10 +782,21 @@
     }
 
     async function deleteExam(id) {
-        if(!confirm("Are you sure you want to delete this ENTIRE exam and all its questions?")) return;
-        await apiCall(`/api/prof/exams/${id}`, { method: 'DELETE' });
-        if(currentExamId === id) document.getElementById('questionBuilder').style.display = 'none';
-        loadExamsAndGroups();
+        if (!confirm("Are you sure? This will permanently delete the exam, all its questions, and all student submissions.")) return;
+        try {
+            const data = await apiCall(`/api/prof/exams/${id}`, { method: 'DELETE' });
+            if (!data.success) {
+                alert('Delete failed: ' + (data.error || 'Unknown error'));
+                return;
+            }
+            if (currentExamId === id) {
+                currentExamId = null;
+                document.getElementById('questionBuilder').style.display = 'none';
+            }
+            loadExamsAndGroups();
+        } catch (err) {
+            alert('Delete failed: ' + err.message);
+        }
     }
 
     async function toggleExam(id) { await apiCall(`/api/prof/exams/${id}/toggle`, { method: 'POST' }); loadExamsAndGroups(); }

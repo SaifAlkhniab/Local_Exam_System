@@ -404,18 +404,70 @@ app.post('/api/prof/exams', professorAuth, (req, res) => {
 
 // 3. Delete Exam (Fix: Clean hard drive for all questions in this exam)
 app.delete('/api/prof/exams/:id', professorAuth, (req, res) => {
-    db.all(`SELECT image_url FROM Questions WHERE exam_id = ? AND image_url IS NOT NULL`, [req.params.id], (err, rows) => {
-        if (rows) {
-            rows.forEach(row => {
-                const imgPath = path.join(__dirname, row.image_url);
-                if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
-            });
+    const examId = req.params.id;
+    const profId = req.user.id;
+
+    // Pre-flight: confirm this exam belongs to this professor before touching anything
+    db.get(`SELECT id, title FROM Exams WHERE id = ? AND professor_id = ?`, [examId, profId], (err, exam) => {
+        if (err) {
+            console.error(`[DELETE EXAM] Ownership check error:`, err.message);
+            return res.status(500).json({ success: false, error: err.message });
         }
-        db.run(`DELETE FROM Questions WHERE exam_id = ?`, [req.params.id], () => {
-            db.run(`DELETE FROM Exams WHERE id = ? AND professor_id = ?`, [req.params.id, req.user.id], function(err) {
-                if (err) return res.status(500).json({ error: err.message });
-                res.json({ success: true });
+        if (!exam) {
+            return res.status(404).json({ success: false, error: 'Exam not found or you do not own it.' });
+        }
+
+        // Clean up image files from disk (non-fatal if files are missing)
+        db.all(`SELECT image_url FROM Questions WHERE exam_id = ? AND image_url IS NOT NULL`, [examId], (_err, rows) => {
+            (rows || []).forEach(row => {
+                try {
+                    const p = path.join(__dirname, row.image_url);
+                    if (fs.existsSync(p)) fs.unlinkSync(p);
+                } catch(e) {
+                    console.error(`[DELETE EXAM] Image cleanup warning:`, e.message);
+                }
             });
+
+            // db.serialize() guarantees these three DELETE statements run one at a time, in order.
+            // Without it, sqlite3 may issue them in parallel and hit FK constraints.
+            let stepError = null;
+
+            db.serialize(() => {
+                // Step 1 — remove all submissions for this exam
+                // (Results.exam_id has a FK to Exams with no CASCADE — must be cleared first)
+                db.run(`DELETE FROM Results WHERE exam_id = ?`, [examId], function(err) {
+                    if (err) {
+                        stepError = err.message;
+                        console.error(`[DELETE EXAM] Step 1 FAILED (Results) for exam ${examId}:`, err.message);
+                    } else {
+                        console.log(`[DELETE EXAM] Step 1 OK — removed ${this.changes} result row(s) for exam ${examId}`);
+                    }
+                });
+
+                // Step 2 — remove all questions for this exam
+                db.run(`DELETE FROM Questions WHERE exam_id = ?`, [examId], function(err) {
+                    if (err && !stepError) {
+                        stepError = err.message;
+                        console.error(`[DELETE EXAM] Step 2 FAILED (Questions) for exam ${examId}:`, err.message);
+                    } else if (!err) {
+                        console.log(`[DELETE EXAM] Step 2 OK — removed ${this.changes} question row(s) for exam ${examId}`);
+                    }
+                });
+
+                // Step 3 — delete the exam row itself; FK constraints are now clear
+                db.run(`DELETE FROM Exams WHERE id = ?`, [examId], function(err) {
+                    if (err) {
+                        console.error(`[DELETE EXAM] Step 3 FAILED (Exams) for exam ${examId}:`, err.message);
+                        return res.status(500).json({ success: false, error: `Step 3 (Exams): ${err.message}` });
+                    }
+                    if (stepError) {
+                        // Exam row was deleted but an earlier step had an error — report it
+                        return res.status(500).json({ success: false, error: `Partial deletion error: ${stepError}` });
+                    }
+                    console.log(`[DELETE EXAM] Exam ${examId} ("${exam.title}") fully deleted by professor ${profId}`);
+                    res.json({ success: true });
+                });
+            }); // end db.serialize
         });
     });
 });

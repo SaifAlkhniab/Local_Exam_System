@@ -1,45 +1,69 @@
-# 🎓 SLEP v3.0 - Secure Local Exam Portal
+🎓 SLEP v3.0 - Secure Local Exam Portal
+SLEP (Secure Local Exam Portal) is a robust, lightweight, and fully automated Role-Based Exam Management System. Built with Node.js and SQLite, it is designed for institutions that need to conduct high-stakes digital exams over a Local Area Network (LAN) without relying on internet connectivity or expensive cloud hosting.
 
-SLEP is a lightweight, secure, and fully automated Role-Based Exam Management System built with Node.js and SQLite. It provides a seamless experience for administrators, professors, and students, allowing institutions to conduct, grade, and export digital exams locally without needing complex cloud infrastructure.
+✨ New in v3.0: High-Security "Kiosk Mode"
+The latest version introduces military-grade exam integrity features:
 
-## ✨ Features
+Auto-Submit on Leave: If a student switches tabs, minimizes the browser, or attempts to navigate away, the exam is instantly submitted and locked.
 
-### 🛡️ Super Admin Portal
-* **Professor Management:** Manually add professors or bulk-import them using CSV files.
-* **Secure Access:** Protected by a dedicated master key defined in the `.env` file.
+Server-Side Timer Sync: The exam clock is tied to the server. Closing the browser or refreshing the page does not reset the timer.
 
-### 👨‍🏫 Professor Dashboard
-* **Exam Creation:** Create Multiple Choice (MCQ), True/False, and Fill-in-the-blank exams.
-* **Bulk Import:** Upload complete exams (Questions + Images) instantly using a formatted `.zip` template.
-* **Group Management:** Assign students to specific groups so they only see exams meant for them.
-* **Live Grading & Export:** System automatically grades exams upon submission. Export full results and analytics to CSV for Excel.
-* **Account Security:** Professors can securely change their own passwords.
+Anti-Cheat Randomization: Fisher-Yates shuffling for both Question order and MCQ/Checkbox options ensures no two students have the same test layout.
 
-### 👨‍🎓 Student Portal
-* **Assigned Exams:** Students only see "Active" exams assigned to their specific group.
-* **Secure Testing:** Features a built-in timer, randomized grading logic, and automatic submission when time runs out.
-* **Instant Feedback:** Students instantly see their final score upon submission.
+Resumption Logic: If a student’s computer crashes, they can log back in and resume exactly where they left off—but only if the server-side timer hasn't expired.
 
-## 🚀 Quick Start (One-Click Setup)
+👨‍🏫 Core Features
+🛡️ Super Admin Portal
+Professor Management: Manually add professors or bulk-import them using CSV files.
 
-We have made running this server incredibly easy. **You do not need to configure databases or manually install dependencies on your first run.**
+Master Security: Protected by a dedicated master key defined in the .env file.
 
-### Prerequisites
-* You must have [Node.js](https://nodejs.org/) installed on your computer.
+👨‍🏫 Professor Dashboard
+Exam Architect: Build MCQ, True/False, and Multi-Answer (Checkbox) exams.
 
-### Windows Users
-1. Download or clone this repository.
-2. Double-click the **`start.bat`** file.
-3. The script will automatically install dependencies, create your `.env` file, and start the server.
+Bulk Image Import: Upload complete exams (Questions + Images) instantly via .zip templates.
 
-### Mac / Linux Users
-1. Download or clone this repository.
-2. Open your terminal and navigate to the folder.
-3. Run `chmod +x start.command` (only needed the first time).
-4. Double-click **`start.command`** or run `./start.command`.
+Result Analytics: Real-time grading with CSV export for Excel.
 
-## 🔐 Default Configuration & First Login
+Violation Tracking: See exactly which students were flagged for attempting to leave the exam screen.
 
-When you run the system for the first time, it auto-generates an `.env` file with your security keys. 
-* **Access the site:** `http://localhost`
-* **Super Admin Setup:** Navigate to `http://localhost/superadmin.html` and enter the default Admin Key: `superadmin123` (Change this in your `.env` file for production!). Create your first Professor account to get started.
+👨‍🎓 Student Portal
+Group-Based Access: Students only see exams assigned to their specific group/class.
+
+Optimized UI: Centered, high-resolution image support and clean, distraction-free testing interface.
+
+🌐 Networking: Allowing Other Devices to Access
+By default, Windows and Mac firewalls often block external devices from connecting to your local server. For students to access the exam from their own laptops/tablets:
+
+Find your Local IP: Open Terminal/CMD and type ipconfig (Windows) or ifconfig (Mac). Look for the IPv4 Address (e.g., 192.168.1.15).
+
+Firewall Exception: * Go to Windows Defender Firewall > Advanced Settings.
+
+Create a new Inbound Rule.
+
+Select Port, then enter 80 (or the port your server uses).
+
+Select Allow the connection.
+
+Student Access: Students will navigate to http://YOUR-IP-ADDRESS instead of localhost.
+
+🚀 One-Click Setup
+Prerequisites
+Node.js (LTS Version recommended).
+
+Windows
+Double-click start.bat. It handles dependency installation, .env generation, and server startup automatically.
+
+Mac / Linux
+Open Terminal in the project folder.
+
+Run chmod +x start.command.
+
+Run ./start.command.
+
+🔐 Security Configuration
+On the first run, the system generates a .env file.
+
+Default Admin Key: superadmin123 (Change this immediately for real exams!).
+
+Database: Powered by SQLite (database.sqlite). No external SQL server required.
