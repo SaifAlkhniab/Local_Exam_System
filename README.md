@@ -67,3 +67,7 @@ On the first run, the system generates a .env file.
 Default Admin Key: superadmin123 (Change this immediately for real exams!).
 
 Database: Powered by SQLite (database.sqlite). No external SQL server required.
+
+When you run the system for the first time, it auto-generates an `.env` file with your security keys. 
+* **Access the site:** `http://localhost`
+* **Super Admin Setup:** Navigate to `http://localhost/superadmin.html` and enter the default Admin Key: `superadmin123` (Change this in your `.env` file for production!). Create your first Professor account to get started.
